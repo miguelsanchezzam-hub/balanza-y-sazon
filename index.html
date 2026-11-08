@@ -1215,9 +1215,24 @@ const IMGS = {"des": "data:image/webp;base64,UklGRjgYAABXRUJQVlA4ICwYAABwXACdASr
     if (r.error) return r;
     return { seed: seed, start: isoToday(), sig: sigOf(cfg), warns: r.warns, days: r.days.map(d => ({ dishes: d.dishes, outs: {}, rep: d.repeatOf, ate: {}, subs: {} })) };
   }
-  function validCustom(c) {
+  const FOOD_TAGS = [['pollo', 'Pollo'], ['res', 'Res'], ['cerdo', 'Cerdo'], ['pescado', 'Pescado o mariscos'], ['huevo', 'Huevo'], ['lacteo', 'Lácteos'], ['nuez', 'Cacahuate o nueces'], ['gluten', 'Gluten (trigo, avena, cebada)']];
+  const numIn = (v, lo, hi) => { const x = Number(v); return isFinite(x) && x >= lo && x <= hi; };
+  function validFood(f) {
+    return f && typeof f === 'object' && typeof f.id === 'string' && /^f_[a-z0-9]+$/.test(f.id) && typeof f.n === 'string' && f.n.trim().length >= 1 &&
+      numIn(f.k, 0, 900) && numIn(f.p, 0, 100) && numIn(f.c === undefined ? 0 : f.c, 0, 100) && numIn(f.fat === undefined ? 0 : f.fat, 0, 100) && numIn(f.pack, 20, 5000) && numIn(f.price, 0, 3000) && [0, 1, 2, 3, 4].indexOf(Number(f.aisle)) >= 0 &&
+      (f.unitG === undefined || f.unitG === null || numIn(f.unitG, 5, 2000));
+  }
+  function cleanFood(f) {
+    const r1 = x => Math.round(Number(x) * 10) / 10, o = { id: f.id, n: String(f.n).trim().slice(0, 40), k: r1(f.k), p: r1(f.p), c: r1(f.c || 0), fat: r1(f.fat || 0), pack: Math.round(f.pack), price: Math.round(f.price), aisle: Number(f.aisle), tags: (Array.isArray(f.tags) ? f.tags : []).filter(t => FOOD_TAGS.some(x => x[0] === t)), mine: true };
+    if (f.unitG) { o.unitG = Math.round(f.unitG); o.unit = ['pieza', 'piezas']; }
+    return o;
+  }
+  const aliasFromName = n => nrm(n).split(' ').map(sing).filter(w => w.length >= 4).slice(0, 3);
+  function registerFood(f) { FOODS[f.id] = f; TK_ALIAS[f.id] = aliasFromName(f.n); }
+  function unregisterFood(id) { delete FOODS[id]; delete TK_ALIAS[id]; }
+  function validCustom(c, cf) {
     return c && typeof c.id === 'string' && /^c_[a-z0-9]+$/.test(c.id) && SLOTS_ALL.indexOf(c.slot) >= 0 && typeof c.name === 'string' && c.name.trim().length >= 1 &&
-      Array.isArray(c.ing) && c.ing.length >= 1 && c.ing.every(i => i && FOODS[i.f] && isFinite(i.g) && i.g > 0 && i.g <= 2000 && ['P', 'B', 'V'].indexOf(i.r) >= 0);
+      Array.isArray(c.ing) && c.ing.length >= 1 && c.ing.every(i => i && (FOODS[i.f] || (cf || []).some(x => x.id === i.f)) && isFinite(i.g) && i.g > 0 && i.g <= 2000 && ['P', 'B', 'V'].indexOf(i.r) >= 0);
   }
   function registerCustom(c) { const i = DISHES.findIndex(d => d.id === c.id); if (i >= 0) DISHES[i] = c; else DISHES.push(c); DISH[c.id] = c; }
   function unregisterCustom(id) { const i = DISHES.findIndex(d => d.id === id); if (i >= 0) DISHES.splice(i, 1); delete DISH[id]; }
@@ -1239,7 +1254,9 @@ const IMGS = {"des": "data:image/webp;base64,UklGRjgYAABXRUJQVlA4ICwYAABwXACdASr
   }
   function normalize(s, apply) {
     if (!s || typeof s !== 'object' || !s.cfg || !s.week || !Array.isArray(s.week.days) || s.week.days.length !== 7) return null;
-    s.custom = (Array.isArray(s.custom) ? s.custom : []).filter(validCustom).map(c => ({ id: c.id, slot: c.slot, name: String(c.name).trim().slice(0, 50), min: Math.max(1, Math.min(240, Math.round(Number(c.min) || 20))), how: String(c.how || '').slice(0, 600), mine: true, ing: c.ing.map(i => ({ f: i.f, g: Math.round(i.g), r: i.r })) }));
+    s.foods = (Array.isArray(s.foods) ? s.foods : []).filter(validFood).slice(0, 80).map(cleanFood);
+    if (apply) s.foods.forEach(registerFood);
+    s.custom = (Array.isArray(s.custom) ? s.custom : []).filter(c => validCustom(c, s.foods)).map(c => ({ id: c.id, slot: c.slot, name: String(c.name).trim().slice(0, 50), min: Math.max(1, Math.min(240, Math.round(Number(c.min) || 20))), how: String(c.how || '').slice(0, 600), mine: true, ing: c.ing.map(i => ({ f: i.f, g: Math.round(i.g), r: i.r })) }));
     const known = id => DISH[id] || s.custom.some(c => c.id === id);
     if (apply) s.custom.forEach(registerCustom);
     for (const d of s.week.days) {
@@ -1265,7 +1282,7 @@ const IMGS = {"des": "data:image/webp;base64,UklGRjgYAABXRUJQVlA4ICwYAABwXACdASr
   S = load();
   if (!S) {
     const cfg = defaultCfg();
-    S = { cfg: cfg, store: 'walmart', budget: 1500, factors: {}, aisleStore: {}, prices: {}, staples: {}, stock: {}, undo: null, prevWeek: null, bought: {}, fav: {}, custom: [], weights: [], partner: null, myName: '', example: true, week: blankWeek() };
+    S = { cfg: cfg, store: 'walmart', budget: 1500, factors: {}, aisleStore: {}, prices: {}, staples: {}, stock: {}, undo: null, prevWeek: null, bought: {}, fav: {}, custom: [], foods: [], weights: [], partner: null, myName: '', example: true, week: blankWeek() };
   }
   { const i = dayIndexToday(S.week.start); sel = i >= 0 && i <= 6 ? i : 0; }
 
@@ -1436,7 +1453,7 @@ const IMGS = {"des": "data:image/webp;base64,UklGRjgYAABXRUJQVlA4ICwYAABwXACdASr
     let h = '';
     if (recMsg) h += '<div class="banner"><p>' + esc(recMsg) + '</p><a class="btn small" href="#semana" style="text-decoration:none">Ver mi semana</a></div>';
     h += '<p class="hint" style="margin-bottom:10px">' + total + ' recetas con tu dieta. Las cantidades son de partida: al ponerlas en un día se ajustan a tu meta.</p>' +
-      '<div class="actions" style="margin-bottom:10px"><button class="btn small" data-act="cr-new">Crear mi receta</button></div>' +
+      '<div class="actions" style="margin-bottom:10px"><button class="btn small" data-act="cr-new">Crear mi receta</button><button class="btn ghost small" data-act="fd-list">Mis ingredientes' + (S.foods.length ? ' (' + S.foods.length + ')' : '') + '</button></div>' +
       '<div class="chips" role="group" aria-label="Filtrar recetas">' + chips.map(c => '<button class="chip" data-act="rec-slot" data-s="' + c[0] + '" aria-pressed="' + (recSlot === c[0]) + '">' + c[1] + '</button>').join('') + '</div>' +
       '<div class="fld" style="margin:10px 0 4px"><label class="sr-only" for="rec-q">Buscar receta</label><input id="rec-q" type="search" placeholder="Buscar por nombre o ingrediente" value="' + esc(recQ) + '" data-act="rec-q"></div>' +
       '<div id="rec-list">' + recListHTML() + '</div>';
@@ -1712,12 +1729,76 @@ const IMGS = {"des": "data:image/webp;base64,UklGRjgYAABXRUJQVlA4ICwYAABwXACdASr
       '<div class="fld"><label for="cr-slot">Tipo de comida</label><select id="cr-slot">' + SLOTS_ALL.map(k => '<option value="' + k + '"' + (k === d.slot ? ' selected' : '') + '>' + SLOT_NAME[k] + '</option>').join('') + '</select></div>' +
       '<div class="fld"><label for="cr-min">Minutos</label><input id="cr-min" type="number" inputmode="numeric" min="1" max="240" value="' + esc(d.min) + '"></div></div>' +
       '<h3 class="sec" style="margin-top:14px">Ingredientes</h3><ul class="crlist">' + rows + '</ul>' +
-      '<div class="actions" style="margin-top:8px"><button class="btn ghost small" data-act="cr-add">Agregar ingrediente</button></div>' +
+      '<div class="actions" style="margin-top:8px"><button class="btn ghost small" data-act="cr-add">Agregar ingrediente</button><button class="btn ghost small" data-act="fd-new" data-from="cr">Crear ingrediente nuevo</button></div>' +
       '<p class="hint" style="margin-top:6px">' + esc(unitHint) + '</p>' +
       '<div class="fld" style="margin-top:12px"><label for="cr-how">Preparación (opcional)</label><textarea id="cr-how" rows="3" maxlength="600">' + esc(d.how) + '</textarea></div>' +
       '<p class="after" id="cr-sum" style="margin:12px 0"></p><p class="hint" id="cr-msg"></p>' +
       '<div class="actions"><button class="btn" data-act="cr-save">Guardar receta</button><button class="btn ghost" data-act="close">Cancelar</button>' + (d.id ? (crDelAsk ? '<button class="btn ghost" data-act="cr-del2">Sí, borrarla</button>' : '<button class="btn ghost" data-act="cr-del">Borrar receta</button>') : '') + '</div>');
     crSumUpdate();
+  }
+  /* ---------- ingredientes propios ---------- */
+  let fdDraft = null, fdDelAsk = false, fdWarned = false;
+  const fdBlank = from => ({ id: null, n: '', base: '100', k: '', p: '', c: '', fat: '', pieceG: '', pack: '500', price: '', aisle: 4, tags: [], from: from || 'list' });
+  const fdFrom = (f, from) => ({ id: f.id, n: f.n, base: '100', k: String(f.k), p: String(f.p), c: f.c ? String(f.c) : '', fat: f.fat ? String(f.fat) : '', pieceG: f.unitG ? String(f.unitG) : '', pack: String(f.pack), price: String(f.price), aisle: f.aisle, tags: (f.tags || []).slice(), from: from || 'list' });
+  function fdRead() {
+    if (!fdDraft) return;
+    const v = id => { const e = qs('#fd-' + id); return e ? e.value : ''; };
+    ['n', 'base', 'k', 'p', 'c', 'fat', 'pieceG', 'pack', 'price'].forEach(k => { fdDraft[k] = v(k); });
+    fdDraft.aisle = Number(v('aisle'));
+    fdDraft.tags = qsa('.fd-tag').filter(e => e.checked).map(e => e.value);
+  }
+  function fdSheet() {
+    const d = fdDraft, num = (id, label, val, ph, hint) => '<div class="fld"><label for="fd-' + id + '">' + label + '</label><input id="fd-' + id + '" type="text" inputmode="decimal" value="' + esc(val) + '" placeholder="' + esc(ph || '') + '"' + (hint ? ' aria-describedby="fd-' + id + '-h"' : '') + '></div>';
+    qs('#sheet-card').setAttribute('aria-labelledby', 'sheet-title');
+    openSheet('<div class="sheet-head"><div><h2 id="sheet-title">' + (d.id ? 'Editar ingrediente' : 'Crear ingrediente nuevo') + '</h2><p class="hint">Copia los valores de la etiqueta nutrimental del producto, tal como lo vas a pesar (crudo o cocido). Si la etiqueta es por porción, escribe el tamaño de la porción en «Los valores son por».</p></div><button class="btn ghost small" data-act="fd-cancel">Volver</button></div>' +
+      '<div class="fields" style="margin-top:12px"><div class="fld"><label for="fd-n">Nombre</label><input id="fd-n" type="text" maxlength="40" value="' + esc(d.n) + '" placeholder="Ej.: Jamón de pavo"></div>' +
+      num('base', 'Los valores son por (g)', d.base, '100') + num('k', 'Calorías (kcal)', d.k, 'Ej.: 110') + num('p', 'Proteína (g)', d.p, 'Ej.: 16') +
+      num('c', 'Carbohidratos (g, opcional)', d.c, '') + num('fat', 'Grasa (g, opcional)', d.fat, '') + num('pieceG', 'Peso de una pieza (g, opcional)', d.pieceG, 'Ej.: 25 por rebanada') + '</div>' +
+      '<h3 class="sec" style="margin-top:14px">Para la lista de compras</h3><div class="fields" style="margin-top:8px">' + num('pack', 'Tamaño del paquete (g)', d.pack, '500') + num('price', 'Precio del paquete ($)', d.price, 'Ej.: 45') +
+      '<div class="fld"><label for="fd-aisle">Pasillo</label><select id="fd-aisle">' + AISLES.map((a, i) => '<option value="' + i + '"' + (i === d.aisle ? ' selected' : '') + '>' + esc(a) + '</option>').join('') + '</select></div></div>' +
+      '<div class="checks" style="margin-top:12px"><span class="lbl">Contiene (para tu dieta)</span>' + FOOD_TAGS.map(t => '<label for="fd-t-' + t[0] + '"><input type="checkbox" class="fd-tag" id="fd-t-' + t[0] + '" value="' + t[0] + '"' + (d.tags.indexOf(t[0]) >= 0 ? ' checked' : '') + '> ' + t[1] + '</label>').join('') + '</div>' +
+      '<p class="hint" style="margin-top:8px">Con esto, las dietas y lo que dejas fuera (lácteos, gluten…) también aplican a este ingrediente.</p><p class="hint" id="fd-msg" style="margin-top:8px"></p>' +
+      '<div class="actions" style="margin-top:8px"><button class="btn" data-act="fd-save">Guardar ingrediente</button><button class="btn ghost" data-act="fd-cancel">Cancelar</button>' + (d.id ? (fdDelAsk ? '<button class="btn ghost" data-act="fd-del2">Sí, borrarlo</button>' : '<button class="btn ghost" data-act="fd-del">Borrar</button>') : '') + '</div>');
+  }
+  function fdBack() {
+    const from = fdDraft && fdDraft.from; fdDraft = null; fdDelAsk = false; fdWarned = false;
+    if (from === 'cr' && crDraft) crSheet(); else if (from === 'list') fdListSheet(); else closeSheet();
+  }
+  function fdListSheet() {
+    qs('#sheet-card').setAttribute('aria-labelledby', 'sheet-title');
+    openSheet('<div class="sheet-head"><div><h2 id="sheet-title">Mis ingredientes</h2><p class="hint">Alimentos que agregaste además de la lista de la app. Los puedes usar en tus recetas, en la despensa y en las compras.</p></div><button class="btn ghost small" data-act="close">Cerrar</button></div>' +
+      (S.foods.length ? '<ul class="cands" style="margin-top:10px">' + S.foods.map(f => '<li class="cand"><div><b>' + esc(f.n) + '</b><small>' + fmtN(f.k) + ' kcal y ' + dec(f.p) + ' g de proteína por 100 g · paquete de ' + esc(packLabel(f)) + ' a ' + money(f.price) + '</small></div><button class="btn ghost small" data-act="fd-edit" data-id="' + f.id + '" data-from="list">Editar</button></li>').join('') + '</ul>' : '<p class="hint" style="margin-top:12px">Todavía no agregas ingredientes.</p>') +
+      '<div class="actions" style="margin-top:12px"><button class="btn" data-act="fd-new" data-from="list">Crear ingrediente nuevo</button></div>');
+  }
+  function fdSave() {
+    fdRead();
+    const d = fdDraft, msg = qs('#fd-msg'), pf = x => { const t = String(x).trim().replace(',', '.'); return t === '' ? null : parseFloat(t); };
+    const name = d.n.trim(), base = pf(d.base) === null ? 100 : pf(d.base);
+    if (name.length < 2) { msg.textContent = 'Ponle un nombre al ingrediente.'; return; }
+    if (FOODS[d.id || ''] === undefined && Object.keys(FOODS).some(k => FOODS[k].n.toLowerCase() === name.toLowerCase())) { msg.textContent = 'Ya existe un ingrediente con ese nombre. Búscalo en la lista de la receta.'; return; }
+    if (!isFinite(base) || base < 1 || base > 2000) { msg.textContent = '«Los valores son por» debe estar entre 1 y 2,000 g.'; return; }
+    const sc = x => { const v = pf(x); return v === null ? 0 : v * 100 / base; };
+    const k = pf(d.k), p = pf(d.p);
+    if (k === null || p === null || !isFinite(k) || !isFinite(p)) { msg.textContent = 'Escribe las calorías y la proteína (pon 0 si no tiene).'; return; }
+    const f = { id: d.id || 'f_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5), n: name, k: k * 100 / base, p: p * 100 / base, c: sc(d.c), fat: sc(d.fat), pack: pf(d.pack) || 500, price: pf(d.price) === null ? 40 : pf(d.price), aisle: d.aisle, tags: d.tags, unitG: pf(d.pieceG) || undefined };
+    if (!validFood(f)) { msg.textContent = 'Revisa los números: por 100 g las calorías van de 0 a 900, y proteína, carbohidratos y grasa de 0 a 100 g; el paquete de 20 a 5,000 g.'; return; }
+    const est = 4 * f.p + 4 * f.c + 9 * f.fat;
+    if ((f.c || f.fat) && Math.abs(est - f.k) > Math.max(40, 0.35 * f.k) && !fdWarned) { fdWarned = true; msg.textContent = 'Las calorías (' + fmtN(f.k) + ') no coinciden con lo que suman proteína, carbohidratos y grasa (≈ ' + fmtN(est) + ' kcal por 100 g). Revisa los datos o toca «Guardar ingrediente» otra vez para dejarlo así.'; return; }
+    const o = cleanFood(f);
+    if (d.id) { const i = S.foods.findIndex(x => x.id === d.id); if (i >= 0) S.foods[i] = o; } else S.foods.push(o);
+    registerFood(o); S.example = false; persist();
+    const from = d.from; fdDraft = null; fdDelAsk = false; fdWarned = false;
+    if (from === 'cr' && crDraft) { if (!d.id) crDraft.ing.push({ f: o.id, g: 100, r: '' }); crSheet(); }
+    else if (from === 'list') fdListSheet(); else { closeSheet(); render(); }
+  }
+  function fdDelete() {
+    const id = fdDraft && fdDraft.id; if (!id) return;
+    const users = S.custom.filter(c => c.ing.some(i => i.f === id));
+    if (users.length) { fdDelAsk = false; fdSheet(); qs('#fd-msg').textContent = 'No se puede borrar: lo usan tus recetas ' + users.map(c => '«' + c.name + '»').join(', ') + '. Quítalo de ahí primero.'; return; }
+    S.foods = S.foods.filter(f => f.id !== id); unregisterFood(id);
+    delete S.stock[id]; delete S.staples[id]; delete S.bought[id]; Object.keys(S.prices).forEach(sid => { if (S.prices[sid]) delete S.prices[sid][id]; });
+    S.week.days.forEach(dd => { for (const sl in (dd.subs || {})) { for (const o in dd.subs[sl]) if (o === id || dd.subs[sl][o] === id) delete dd.subs[sl][o]; if (!Object.keys(dd.subs[sl]).length) delete dd.subs[sl]; } });
+    persist(); fdDraft = null; fdDelAsk = false; fdListSheet(); render();
   }
   function crSave() {
     crRead();
@@ -1775,7 +1856,7 @@ const IMGS = {"des": "data:image/webp;base64,UklGRjgYAABXRUJQVlA4ICwYAABwXACdASr
   function planObj(withCfg) {
     const week = JSON.parse(JSON.stringify(S.week));
     week.days.forEach(d => { d.ate = {}; });
-    const o = { app: 'balanza-y-sazon', v: 1, from: S.myName || '', week: week, store: S.store, aisleStore: S.aisleStore, factors: S.factors, prices: S.prices, staples: S.staples, stock: S.stock, budget: S.budget, custom: S.custom };
+    const o = { app: 'balanza-y-sazon', v: 1, from: S.myName || '', week: week, store: S.store, aisleStore: S.aisleStore, factors: S.factors, prices: S.prices, staples: S.staples, stock: S.stock, budget: S.budget, custom: S.custom, foods: S.foods };
     if (withCfg) o.cfg = { meta: S.cfg.meta, sexo: S.cfg.sexo, edad: S.cfg.edad, peso: S.cfg.peso, talla: S.cfg.talla, act: S.cfg.act, kOv: S.cfg.kOv, pOv: S.cfg.pOv };
     return o;
   }
@@ -1803,6 +1884,8 @@ const IMGS = {"des": "data:image/webp;base64,UklGRjgYAABXRUJQVlA4ICwYAABwXACdASr
     ['store', 'aisleStore', 'factors', 'prices', 'staples', 'stock', 'budget'].forEach(k => { if (o[k] !== undefined) c[k] = JSON.parse(JSON.stringify(o[k])); });
     const mine = c.custom || [], theirs = Array.isArray(o.custom) ? o.custom : [];
     c.custom = mine.concat(theirs.filter(x => x && !mine.some(y => y.id === x.id)));
+    const fm = c.foods || [], ft = Array.isArray(o.foods) ? o.foods : [];
+    c.foods = fm.concat(ft.filter(x => x && !fm.some(y => y.id === x.id)));
     c.bought = {}; c.example = false;
     return c;
   }
@@ -1825,7 +1908,7 @@ const IMGS = {"des": "data:image/webp;base64,UklGRjgYAABXRUJQVlA4ICwYAABwXACdASr
     const n = normalize(JSON.parse(JSON.stringify(data || null)), false);
     if (!n) return { error: 'Ese archivo no tiene el formato de un respaldo de Balanza y Sazón.' };
     const dishes = n.week.days.reduce((x, d) => x + Object.keys(d.dishes).length, 0);
-    return { data: data, summary: 'Contiene una semana con ' + dishes + ' platillos, ' + n.custom.length + ' recetas propias, ' + Object.keys(n.fav).length + ' favoritas, ' + n.weights.length + ' registros de peso y ' + (Object.keys(n.stock).length + Object.keys(n.staples).length) + ' productos en casa.' };
+    return { data: data, summary: 'Contiene una semana con ' + dishes + ' platillos, ' + n.custom.length + ' recetas propias, ' + n.foods.length + ' ingredientes propios, ' + Object.keys(n.fav).length + ' favoritas, ' + n.weights.length + ' registros de peso y ' + (Object.keys(n.stock).length + Object.keys(n.staples).length) + ' productos en casa.' };
   }
   function restoreSheet() {
     bkPending = null;
@@ -2266,7 +2349,14 @@ const IMGS = {"des": "data:image/webp;base64,UklGRjgYAABXRUJQVlA4ICwYAABwXACdASr
       case 'sub-clear': { const dd = S.week.days[+el.dataset.d]; if (dd.subs) delete dd.subs[el.dataset.s]; persist(); render(); break; }
       case 'cr-new': crDraft = { id: null, name: '', slot: recSlot !== 'all' && SLOTS_ALL.indexOf(recSlot) >= 0 ? recSlot : 'com', min: 20, how: '', ing: [{ f: 'pollo', g: 150, r: '' }, { f: 'arroz', g: 80, r: '' }] }; crDelAsk = false; crSheet(); break;
       case 'cr-edit': { const d = DISH[el.dataset.id]; if (!d || !d.mine) break; crDraft = { id: d.id, name: d.name, slot: d.slot, min: d.min, how: d.how || '', ing: d.ing.map(i => ({ f: i.f, g: i.g, r: i.r })) }; crDelAsk = false; crSheet(); break; }
-      case 'cr-add': crRead(); crDraft.ing.push({ f: 'jitomate', g: 100, r: '' }); crSheet(); break;
+      case 'cr-add': { crRead(); const used = new Set(crDraft.ing.map(i => i.f)); const nf = ['jitomate', 'cebolla', 'zanahoria', 'lechuga', 'aguacate'].concat(Object.keys(FOODS)).find(f => FOODS[f] && !used.has(f)) || 'jitomate'; crDraft.ing.push({ f: nf, g: 100, r: '' }); crSheet(); break; }
+      case 'fd-new': if (el.dataset.from === 'cr') crRead(); fdDraft = fdBlank(el.dataset.from); fdSheet(); break;
+      case 'fd-list': fdListSheet(); break;
+      case 'fd-edit': { const f = FOODS[el.dataset.id]; if (!f || !f.mine) break; fdDraft = fdFrom(f, el.dataset.from); fdSheet(); break; }
+      case 'fd-save': fdSave(); break;
+      case 'fd-cancel': fdBack(); break;
+      case 'fd-del': fdRead(); fdDelAsk = true; fdSheet(); break;
+      case 'fd-del2': fdDelete(); break;
       case 'cr-rm': crRead(); crDraft.ing.splice(+el.dataset.i, 1); crSheet(); break;
       case 'cr-save': crSave(); break;
       case 'cr-del': crRead(); crDelAsk = true; crSheet(); break;
@@ -2295,7 +2385,7 @@ const IMGS = {"des": "data:image/webp;base64,UklGRjgYAABXRUJQVlA4ICwYAABwXACdASr
         const cand = planCandidate(plan);
         if (!normalize(JSON.parse(JSON.stringify(cand)), false)) break;
         const snap = weekHasDishes() ? { week: S.week, bought: S.bought, shared: { store: S.store, aisleStore: S.aisleStore, factors: S.factors, prices: S.prices, staples: S.staples, stock: S.stock, budget: S.budget } } : null;
-        S.custom.forEach(c => unregisterCustom(c.id));
+        S.custom.forEach(c => unregisterCustom(c.id)); S.foods.forEach(f => unregisterFood(f.id));
         const n = normalize(cand, true);
         n.prevWeek = snap; n.undo = null;
         if (wantP) n.partner = cleanPartner({ name: (plan.from || '').trim() || 'Mi pareja', cfg: plan.cfg });
@@ -2329,7 +2419,7 @@ const IMGS = {"des": "data:image/webp;base64,UklGRjgYAABXRUJQVlA4ICwYAABwXACdASr
       case 'bk-apply': {
         if (!bkPending) break;
         const fresh = normalize(JSON.parse(JSON.stringify(bkPending)), false); if (!fresh) break;
-        S.custom.forEach(c => unregisterCustom(c.id));
+        S.custom.forEach(c => unregisterCustom(c.id)); S.foods.forEach(f => unregisterFood(f.id));
         const n = normalize(JSON.parse(JSON.stringify(bkPending)), true);
         S = n; bkPending = null; open = new Set(); sel = Math.max(0, Math.min(6, dayIndexToday(S.week.start))); persist(); closeSheet(); route(); break;
       }
