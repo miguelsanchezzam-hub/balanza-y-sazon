@@ -1,0 +1,16 @@
+{
+  "name": "Balanza y Sazón",
+  "short_name": "Balanza",
+  "description": "Tu semana de comida, medida: porciones, compras, despensa y progreso.",
+  "lang": "es-MX",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#F8F0E3",
+  "theme_color": "#F8F0E3",
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}
