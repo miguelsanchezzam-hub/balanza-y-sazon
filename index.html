@@ -371,11 +371,31 @@ h2, h3 { font-family: var(--f-body); font-weight: 700; letter-spacing: -0.015em;
   .tabs, .sheet-card { -webkit-backdrop-filter: none; backdrop-filter: none; }
 }
 @media (prefers-reduced-motion: reduce) { .btn, .tabs a { transition: none; } .btn:active { transform: none; } }
+
+/* ---------- encabezado integrado con la ilustración ---------- */
+.top { gap: 0; padding-bottom: 14px; }
+.mast { position: relative; display: grid; place-items: center; min-height: 190px; border-radius: 30px; overflow: hidden; background-color: var(--surface2); box-shadow: 0 0 0 0.5px var(--line), 0 12px 28px -20px rgba(70, 40, 10, 0.55); }
+.mast-art { position: absolute; inset: 0; background-size: cover; background-position: center; }
+.mast-t {
+  position: relative; display: flex; flex-direction: column; align-items: center; gap: 2px; text-align: center; margin: 22px 16px; padding: 14px 26px 16px; max-width: calc(100% - 32px);
+  border-radius: 26px; background: rgb(var(--glass-rgb) / calc(0.5 + var(--glass-o) * 0.3));
+  -webkit-backdrop-filter: blur(14px) saturate(170%); backdrop-filter: blur(14px) saturate(170%);
+  box-shadow: inset 0 1px 0 var(--hi), inset 0 0 0 0.5px var(--lo), 0 10px 24px -14px var(--shade);
+}
+.mast-t h1 { font-size: clamp(30px, 8.4vw, 46px); }
+.top .sub { text-align: center; margin-top: 12px; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .mast-art { filter: brightness(0.8); } }
+:root[data-theme="dark"] .mast-art { filter: brightness(0.8); }
+@media (min-width: 900px) {
+  .top { max-width: 560px; }
+  .top .sub { text-align: left; }
+  .mast { min-height: 210px; }
+}
+@media (prefers-reduced-transparency: reduce) { .mast-t { -webkit-backdrop-filter: none; backdrop-filter: none; } }
 </style>
 <div class="wrap" id="app">
   <header class="top">
-    <span class="eyebrow">Tu semana de comida</span>
-    <h1>Balanza y Sazón</h1>
+    <div class="mast"><span class="mast-art im-hero" aria-hidden="true"></span><div class="mast-t"><span class="eyebrow">Tu semana de comida</span><h1>Balanza y Sazón</h1></div></div>
     <div class="sub" id="sub"></div>
   </header>
   <main id="view"></main>
@@ -1363,7 +1383,7 @@ const IMGS = {"des": "data:image/webp;base64,UklGRjgYAABXRUJQVlA4ICwYAABwXACdASr
     if (flash) { h += '<div class="banner" role="status"><p>' + esc(flash) + '</p></div>'; flash = ''; }
     if (buildErr) h += '<div class="banner"><p>' + esc(buildErr) + '</p></div>';
     if (S.week.warns && S.week.warns.length) h += '<div class="banner"><p>' + S.week.warns.map(esc).join(' ') + '</p></div>';
-    if (!has) h += '<section class="card hero"><span class="hero-img im-hero" aria-hidden="true"></span><div class="hero-t"><h2>Arma tu semana a tu manera</h2><p class="hint" style="margin:6px 0 14px">Hay ' + total + ' recetas para elegir. Escoge cada comida de cada día, o explora las recetas y ponlas donde quieras. Las porciones se ajustan solas a tu meta. Si prefieres partir de una propuesta, puedo sugerirte una semana y la cambias a tu gusto.</p><div class="actions"><a class="btn" href="#recetas" style="text-decoration:none">Ver las recetas</a><button class="btn ghost" data-act="rebuild">Sugerirme una semana</button></div></div></section>';
+    if (!has) h += '<section class="card hero"><div class="hero-t"><h2>Arma tu semana a tu manera</h2><p class="hint" style="margin:6px 0 14px">Hay ' + total + ' recetas para elegir. Escoge cada comida de cada día, o explora las recetas y ponlas donde quieras. Las porciones se ajustan solas a tu meta. Si prefieres partir de una propuesta, puedo sugerirte una semana y la cambias a tu gusto.</p><div class="actions"><a class="btn" href="#recetas" style="text-decoration:none">Ver las recetas</a><button class="btn ghost" data-act="rebuild">Sugerirme una semana</button></div></div></section>';
     h += '<div class="semana-grid"><div class="side">';
     if (has) { const sh = shopTotals(currentShop(days, tg)), nh = Object.keys(S.stock).filter(k => S.stock[k] > 0).length + Object.keys(S.staples).filter(k => S.staples[k]).length;
       h += '<a class="spend" href="#compras"><span>Esta semana pagas en caja</span><b>' + money(sh.paid) + '</b><small>' + (nh ? 'Ya descontado lo que tienes en casa (' + nh + (nh === 1 ? ' producto' : ' productos') + ')' : 'Aún no registras nada en casa: toca para anotarlo') + '</small></a>'; }
