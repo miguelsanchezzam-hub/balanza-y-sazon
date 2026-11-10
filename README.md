@@ -75,6 +75,10 @@ tests/run.sh          ← pruebas del motor
 
 Cada ingrediente propio tiene el botón **Proponer al catálogo común**: abre una propuesta (un *issue*) en este repositorio con las cifras ya escritas. Una vez por semana se revisan (cifras coherentes, sin repetidos, etiquetas de dieta; reglas en `catalog/REVIEW.md`) y las que pasan entran en `MORE_FOODS` y llegan a todas las personas con la siguiente versión. Mientras tanto el ingrediente sigue disponible en tu propio dispositivo.
 
+## Precios de la comunidad
+
+En **Compras → Compartir mis precios con la comunidad** envías (por una propuesta en GitHub) los precios que calibraste con tickets: solo tienda, producto, precio por paquete y mes; sin fotos ni nombre. Cada semana se juntan con los de todos (`catalog/aggregate.js`: se descartan los raros y se usa la mediana) y llegan a la app como «precio de la comunidad». Tus propios precios siempre ganan sobre los de la comunidad.
+
 ## Pruebas
 
 `./tests/run.sh` corre las pruebas del motor: cada perfil de dieta debe cumplir la meta de calorías y proteína en los 140 días de prueba, y las sustituciones y la despensa se verifican por separado.

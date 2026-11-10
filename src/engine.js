@@ -217,7 +217,9 @@ function defsOf(dd) {
 /* Compras: gramos de toda la semana → paquetes completos → precio por tienda. */
 function storeFactor(factors, storeId) {
   const st = STORES.find(s => s.id === storeId) || STORES[2];
-  return factors && typeof factors[storeId] === 'number' ? factors[storeId] : st.f;
+  if (factors && typeof factors[storeId] === 'number') return factors[storeId];
+  const cf = typeof COMMUNITY !== 'undefined' && COMMUNITY.factors[storeId];
+  return cf ? cf[0] : st.f;
 }
 /* Alimentos que duran más de una semana: sus sobrantes se guardan para la siguiente. El resto (hoja verde, carne, lácteos, pan) se echa a perder. */
 const KEEPS = new Set(['arroz', 'pasta', 'avena', 'frijol', 'lenteja', 'garbanzo', 'aceite', 'cacahuate', 'almendra', 'atun', 'papa', 'camote', 'cebolla', 'zanahoria', 'huevo', 'manzana'].concat(typeof MORE_KEEPS !== 'undefined' ? MORE_KEEPS : []));
@@ -240,9 +242,10 @@ function shopRows(dayEvs, people, storeId, factors, prices, staples, stock, aisl
     const net = Math.max(0, buyG - have);
     const packs = staple || net < 0.5 ? 0 : Math.ceil(net / fd.pack - 1e-9);
     const over = typeof ov[id] === 'number';
-    const unit = over ? ov[id] : Math.round(fd.price * fac);
+    const cp = !over && typeof COMMUNITY !== 'undefined' && COMMUNITY.prices[sid] && COMMUNITY.prices[sid][id];
+    const unit = over ? ov[id] : cp ? cp[0] : Math.round(fd.price * fac);
     const leftover = staple ? null : have + packs * fd.pack - buyG;
-    return { id, fd, sid, need: need[id], buyG, exact, net, have, packs, unit, over, eaten: exact * unit, paid: packs * unit, staple, leftover };
+    return { id, fd, sid, need: need[id], buyG, exact, net, have, packs, unit, over, com: cp ? cp[1] : 0, eaten: exact * unit, paid: packs * unit, staple, leftover };
   });
 }
 function shopTotals(rows) {

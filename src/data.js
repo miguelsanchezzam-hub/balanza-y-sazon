@@ -461,3 +461,8 @@ const STORES = [
   { id: 'abarrotes', n: 'Tienda de la esquina', f: 1.12 },
   { id: 'lacomer', n: 'La Comer', f: 1.2 }
 ];
+
+/* COMMUNITY:START (lo regenera catalog/aggregate.js cada semana; no editar a mano)
+   Precios medidos con tickets de la gente: tienda → producto → [precio por paquete, tickets]; factores de tienda → [factor, tickets]. */
+const COMMUNITY = { updated: '', prices: {}, factors: {} };
+/* COMMUNITY:END */

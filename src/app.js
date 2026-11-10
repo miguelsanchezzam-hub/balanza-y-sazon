@@ -323,7 +323,7 @@
         const editing = editPrice === r.id;
         const info = r.staple ? '<small>Siempre lo tienes: no se compra</small>'
           : '<small>' + need + (r.have > 0 ? ' · en casa ' + fmtN(r.have) + ' g' : '') + '</small>' +
-            '<small>' + (covered ? 'Cubierto con lo que tienes' : r.packs + ' × ' + esc(packLabel(fd)) + ' · ' + money(r.unit) + ' c/u' + (r.over ? ' (tu precio)' : '')) + '</small>';
+            '<small>' + (covered ? 'Cubierto con lo que tienes' : r.packs + ' × ' + esc(packLabel(fd)) + ' · ' + money(r.unit) + ' c/u' + (r.over ? ' (tu precio)' : r.com ? ' (precio de la comunidad)' : '')) + '</small>';
         return '<li class="srow' + (r.staple || covered ? ' is-pantry' : '') + (bought ? ' is-bought' : '') + '">' +
           (r.packs > 0 ? '<label class="chk"><input type="checkbox" id="b-' + r.id + '" data-act="bought" data-f="' + r.id + '"' + (bought ? ' checked' : '') + '><span class="sr-only">Comprado: ' + esc(fd.buy || fd.n) + '</span></label>' : '<span class="chk-sp"></span>') +
           '<div class="sinfo"><span class="sname">' + esc(fd.buy || fd.n) + '</span>' + info + '</div>' +
@@ -648,6 +648,51 @@
     const url = 'https://github.com/' + CATALOG_REPO + '/issues/new?labels=propuesta-ingrediente&title=' + encodeURIComponent('Propuesta de ingrediente: ' + f.n) + '&body=' + encodeURIComponent(text);
     textSheet('Proponer al catálogo común', 'Se revisa cada semana: confirmo que las cifras sean coherentes, que no esté repetido y que las etiquetas de dieta sean correctas. Si pasa, queda en la lista de todos en la siguiente versión.', text,
       '<p style="margin-top:12px"><a class="btn small" href="' + esc(url) + '" target="_blank" rel="noopener">Abrir la propuesta en GitHub</a></p><p class="hint" style="margin-top:8px">Necesitas una cuenta de GitHub para enviarla ahí. Si no tienes, copia el texto y mándaselo a quien administra la app.</p>');
+  }
+
+  /* ---------- compartir precios de tickets con la comunidad ---------- */
+  const SENT_KEY = 'bys-price-sent-v1';
+  const sentMap = () => { try { return JSON.parse(localStorage.getItem(SENT_KEY) || '{}') || {}; } catch (e) { return {}; } };
+  let priceOut = null;
+  function priceReport() {
+    const sent = sentMap(), prices = [], factors = [], skipped = [];
+    Object.keys(S.prices).forEach(sid => {
+      if (!STORES.some(s => s.id === sid)) return;
+      Object.keys(S.prices[sid] || {}).forEach(id => {
+        const v = S.prices[sid][id], fd = FOODS[id];
+        if (!fd || fd.mine || typeof v !== 'number' || sent[sid + '|' + id] === v) return;
+        const base = fd.price * (STORES.find(s => s.id === sid).f);
+        if (v < base * 0.4 || v > base * 2.5) skipped.push(fd.n + ' (' + storeName(sid) + ', ' + money(v) + ')'); else prices.push([sid, id, v, fd.pack]);
+      });
+    });
+    Object.keys(S.factors || {}).forEach(sid => {
+      const f = S.factors[sid];
+      if (STORES.some(s => s.id === sid) && typeof f === 'number' && f >= 0.7 && f <= 1.5 && sent['f|' + sid] !== f) factors.push([sid, Math.round(f * 100) / 100]);
+    });
+    return { prices: prices.slice(0, 80), more: Math.max(0, prices.length - 80), factors: factors, skipped: skipped };
+  }
+  function pricesShareSheet() {
+    const r = priceReport(), month = new Date().toISOString().slice(0, 7);
+    if (!r.prices.length && !r.factors.length) {
+      textSheet('Compartir mis precios', 'No tienes precios nuevos para compartir. Guarda precios de un ticket (o calibra una tienda) y vuelve aquí. Los que ya compartiste no se repiten.', '', ''); qs('#sheet-card .fld').hidden = true; qs('#sheet-card [data-act=copy-text]').hidden = true;
+      if (r.skipped.length) qs('#copy-msg').textContent = 'No se incluyeron por verse muy raros: ' + r.skipped.join('; ') + '.';
+      return;
+    }
+    priceOut = r;
+    const json = JSON.stringify({ m: month, prices: r.prices, factors: r.factors });
+    const lines = r.prices.map(x => storeName(x[0]) + ' · ' + FOODS[x[1]].n + ' · ' + money(x[2]) + ' por ' + packLabel(FOODS[x[1]])).concat(r.factors.map(x => storeName(x[0]) + ' · factor de tienda ' + x[1]));
+    const title = 'Propuesta de precios: ' + r.prices.length + ' productos (' + month + ')';
+    const body = 'Precios medidos con tickets (mes ' + month + ', pesos por paquete de la app).\n\n```json\n' + json + '\n```\n';
+    const text = 'Se enviarán solo estos datos: tienda, producto, precio por paquete, mes. Sin fotos, sin nombre, sin total del ticket.\n\n' + lines.join('\n') + (r.more ? '\n(y ' + r.more + ' más en la siguiente tanda)' : '') + '\n\n' + body;
+    const url = 'https://github.com/' + CATALOG_REPO + '/issues/new?labels=propuesta-precios&title=' + encodeURIComponent(title) + '&body=' + encodeURIComponent(body);
+    textSheet('Compartir mis precios', 'Cada semana se juntan los precios de todos: se descartan los raros y se usa la mediana, y llegan a todos en la siguiente versión como «precio de la comunidad».', text,
+      '<p style="margin-top:12px"><a class="btn small" href="' + esc(url) + '" target="_blank" rel="noopener" data-act="prices-sent">Abrir en GitHub y enviar</a></p><p class="hint" style="margin-top:8px">Necesitas una cuenta de GitHub. Si no tienes, copia el texto y mándaselo a quien administra la app. Al abrir el enlace marco estos precios como enviados para no repetirlos.' + (r.skipped.length ? ' No se incluyeron por verse muy raros: ' + esc(r.skipped.join('; ')) + '.' : '') + '</p>');
+  }
+  function pricesMarkSent() {
+    if (!priceOut) return; const m = sentMap();
+    priceOut.prices.forEach(x => { m[x[0] + '|' + x[1]] = x[2]; }); priceOut.factors.forEach(x => { m['f|' + x[0]] = x[1]; });
+    try { localStorage.setItem(SENT_KEY, JSON.stringify(m)); } catch (e) { /* sin almacenamiento */ }
+    priceOut = null;
   }
   /* ---------- ingredientes propios ---------- */
   let fdDraft = null, fdDelAsk = false, fdWarned = false;
@@ -993,7 +1038,8 @@
       '<div id="tk-box" hidden><div class="fld" id="tk-file-wrap" hidden><label for="tk-file">Foto del ticket</label><input id="tk-file" type="file" accept="image/*" multiple></div>' +
       '<div class="fld" style="margin-top:10px"><label for="tk-text">Pega el texto del ticket (opcional si subes foto)</label><textarea id="tk-text" rows="4" maxlength="6000" data-act="tk-text">' + esc(tkText) + '</textarea></div>' +
       '<div class="fld" style="margin-top:10px"><label for="tk-store">Tienda del ticket</label><select id="tk-store">' + STORES.map(s => '<option value="' + s.id + '"' + (s.id === (tkDraft ? tkDraft.store : S.store) ? ' selected' : '') + '>' + esc(s.n) + '</option>').join('') + '</select></div>' +
-      '<div class="actions" style="margin-top:10px"><button class="btn small" id="tk-read" data-act="tk-read">Leer ticket</button></div></div><p class="hint" id="tk-msg" style="margin-top:8px">' + esc(tkMsg) + '</p>';
+      '<div class="actions" style="margin-top:10px"><button class="btn small" id="tk-read" data-act="tk-read">Leer ticket</button></div></div><p class="hint" id="tk-msg" style="margin-top:8px">' + esc(tkMsg) + '</p>' +
+      '<div class="actions" style="margin-top:6px"><button class="btn ghost small" data-act="prices-share">Compartir mis precios con la comunidad</button></div>';
     if (tkDraft) {
       const ids = Object.keys(FOODS).sort((a, b) => (FOODS[a].buy || FOODS[a].n).localeCompare(FOODS[b].buy || FOODS[b].n, 'es'));
       h += '<h3 class="sec" style="margin-top:14px">Revisa lo que leí</h3><p class="hint">Corrige el producto o el precio por paquete, y desmarca lo que no quieras guardar.' + (tkDraft.total ? ' Total del ticket: ' + money(tkDraft.total) + '.' : '') + '</p><ul class="slist">' +
@@ -1277,6 +1323,8 @@
       }
       case 'fd-list': fdListSheet(); break;
       case 'fd-prop': proposalSheet(el.dataset.id); break;
+      case 'prices-share': pricesShareSheet(); break;
+      case 'prices-sent': pricesMarkSent(); break;
       case 'fd-edit': { const f = FOODS[el.dataset.id]; if (!f || !f.mine) break; fdDraft = fdFrom(f, el.dataset.from); fdSheet(); break; }
       case 'fd-save': fdSave(); break;
       case 'fd-cancel': fdBack(); break;
