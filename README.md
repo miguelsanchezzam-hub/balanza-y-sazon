@@ -75,6 +75,10 @@ tests/run.sh          ← pruebas del motor
 
 Cada ingrediente propio tiene el botón **Proponer al catálogo común**: abre una propuesta (un *issue*) en este repositorio con las cifras ya escritas. Una vez por semana se revisan (cifras coherentes, sin repetidos, etiquetas de dieta; reglas en `catalog/REVIEW.md`) y las que pasan entran en `MORE_FOODS` y llegan a todas las personas con la siguiente versión. Mientras tanto el ingrediente sigue disponible en tu propio dispositivo.
 
+## Recetas de la comunidad
+
+Tus recetas creadas aparecen arriba en **Recetas → Mis recetas creadas**, además de en el menú general con la etiqueta «mía». Cada una tiene **Proponer**, y hay **Enviar todas las recetas** (de 3 en 3). Las aprobadas pasan al menú de todos (`MORE_DISHES` en `src/data.js`) y desaparecen de tu sección propia sin perder tu semana ni tus favoritas. Si no tienes cuenta de GitHub, cada pantalla de envío tiene **Compartir por Telegram**; para que abra directo el chat del administrador, escribe su usuario (sin @) en `TELEGRAM_USER` de `src/app.js`.
+
 ## Precios de la comunidad
 
 En **Compras → Compartir mis precios con la comunidad** envías (por una propuesta en GitHub) los precios que calibraste con tickets: solo tienda, producto, precio por paquete y mes; sin fotos ni nombre. Cada semana se juntan con los de todos (`catalog/aggregate.js`: se descartan los raros y se usa la mediana) y llegan a la app como «precio de la comunidad». Tus propios precios siempre ganan sobre los de la comunidad.

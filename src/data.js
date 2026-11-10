@@ -47,7 +47,7 @@ const FOODS = {
 
 /* ---------- catálogo ampliado ----------
    Compacto: [id, nombre, kcal, proteína, carbohidratos, grasa, paquete (g), precio ($), pasillo, 'etiquetas', extras]
-   extras: kw = sinónimos para el buscador · al = palabras del ticket · nosub = no se ofrece como sustituto · packLabel, unitG, unit, dry, buy, step como en FOODS. */
+   extras: ap = nombre con el que alguien lo propuso (si se cambió al aprobarlo; sirve para quitar su copia propia) · kw = sinónimos para el buscador · al = palabras del ticket · nosub = no se ofrece como sustituto · packLabel, unitG, unit, dry, buy, step como en FOODS. */
 const MORE_FOODS = [
   /* Carnes, aves y pescado */
   ['muslo', 'Muslo de pollo sin piel (crudo)', 121, 19.7, 0, 4.1, 1000, 80, 0, 'pollo', { kw: 'pierna muslo pollo ave', al: ['muslo'] }],
@@ -245,7 +245,7 @@ const FOOD_KW = {
   MORE_FOODS.forEach(r => {
     const e = r[10] || {}; if (FOODS[r[0]]) return;
     const f = { n: r[1], k: r[2], p: r[3], c: r[4], fat: r[5], pack: r[6], price: r[7], aisle: r[8], tags: r[9] ? r[9].split(',') : [] };
-    ['buy', 'packLabel', 'unitG', 'unit', 'dry', 'step', 'nosub', 'al'].forEach(x => { if (e[x] !== undefined) f[x] = e[x]; });
+    ['buy', 'packLabel', 'unitG', 'unit', 'dry', 'step', 'nosub', 'al', 'ap'].forEach(x => { if (e[x] !== undefined) f[x] = e[x]; });
     f.kw = e.kw || ''; FOODS[r[0]] = f;
   });
   for (const id in FOOD_KW) if (FOODS[id]) FOODS[id].kw = FOOD_KW[id];
@@ -448,6 +448,14 @@ const DISHES = [
     how: 'Cuece los huevos 10 minutos y sírvelos con el aguacate en rebanadas.',
     ing: [{ f: 'huevo', g: 100, r: 'P' }, { f: 'aguacate', g: 30, r: 'B' }] }
 ];
+
+/* ---------- recetas del menú común ----------
+   Recetas propuestas por la gente y aprobadas en la revisión semanal. Mismo formato que DISHES;
+   id 'rc_…' sin acentos; ap = nombres con los que alguien la propuso (para quitar su copia propia). */
+const MORE_DISHES = [
+];
+MORE_DISHES.forEach(x => DISHES.push(x));
+
 
 /* Factores iniciales: suposiciones del autor, no precios medidos. El usuario los calibra con su ticket. */
 const STORES = [

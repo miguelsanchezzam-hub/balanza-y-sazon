@@ -84,10 +84,39 @@
     const cfg = cleanCfg(p.cfg); if (!cfg) return null;
     return { name: String(p.name || 'Mi pareja').trim().slice(0, 30) || 'Mi pareja', cfg: cfg };
   }
+  let migNote = [], migRec = [];
   function normalize(s, apply) {
     if (!s || typeof s !== 'object' || !s.cfg || !s.week || !Array.isArray(s.week.days) || s.week.days.length !== 7) return null;
     s.foods = (Array.isArray(s.foods) ? s.foods : []).filter(validFood).slice(0, 80).map(cleanFood);
-    if (apply) s.foods.forEach(registerFood);
+    if (apply) {
+      /* un ingrediente propio que ya entró al catálogo común se sustituye por el del catálogo */
+      const map = {}, sig = x => nrm(x);
+      s.foods = s.foods.filter(f => {
+        const hit = Object.keys(FOODS).find(id => !FOODS[id].mine && (sig(FOODS[id].n) === sig(f.n) || (FOODS[id].ap || []).some(x => sig(x) === sig(f.n))));
+        if (!hit) return true;
+        map[f.id] = hit; migNote.push(f.n + ' (ahora «' + FOODS[hit].n + '»)'); return false;
+      });
+      if (Object.keys(map).length) {
+        (Array.isArray(s.custom) ? s.custom : []).forEach(c => { if (c && Array.isArray(c.ing)) c.ing.forEach(i => { if (i && map[i.f]) i.f = map[i.f]; }); });
+        ['stock', 'staples', 'bought'].forEach(k => { if (s[k] && typeof s[k] === 'object') Object.keys(map).forEach(o => { if (o in s[k]) { if (!(map[o] in s[k])) s[k][map[o]] = s[k][o]; delete s[k][o]; } }); });
+        if (s.prices && typeof s.prices === 'object') Object.keys(s.prices).forEach(sid => { const p = s.prices[sid]; if (p && typeof p === 'object') Object.keys(map).forEach(o => { if (o in p) { if (!(map[o] in p)) p[map[o]] = p[o]; delete p[o]; } }); });
+        (s.week && s.week.days || []).forEach(dd => { for (const sl in (dd && dd.subs) || {}) { const sub = dd.subs[sl], ns = {}; Object.keys(sub || {}).forEach(k => { ns[map[k] || k] = map[sub[k]] || sub[k]; }); dd.subs[sl] = ns; } });
+      }
+      s.foods.forEach(registerFood);
+      /* lo mismo con las recetas propias que ya entraron al menú común */
+      const rmap = {};
+      if (Array.isArray(s.custom)) s.custom = s.custom.filter(c => {
+        if (!c || typeof c.name !== 'string') return true;
+        const hit = DISHES.find(x => !x.mine && (nrm(x.name) === nrm(c.name) || (x.ap || []).some(y => nrm(y) === nrm(c.name))));
+        if (!hit) return true;
+        rmap[c.id] = hit.id; migRec.push(c.name + ' (ahora «' + hit.name + '»)'); return false;
+      });
+      if (Object.keys(rmap).length) {
+        const fixWeek = w => (w && Array.isArray(w.days) ? w.days : []).forEach(dd => { if (dd && dd.dishes) for (const k in dd.dishes) if (rmap[dd.dishes[k]]) dd.dishes[k] = rmap[dd.dishes[k]]; });
+        fixWeek(s.week); fixWeek(s.prevWeek); fixWeek(s.undo && s.undo.week);
+        if (s.fav && typeof s.fav === 'object') Object.keys(rmap).forEach(o => { if (o in s.fav) { s.fav[rmap[o]] = s.fav[o]; delete s.fav[o]; } });
+      }
+    }
     s.custom = (Array.isArray(s.custom) ? s.custom : []).filter(c => validCustom(c, s.foods)).map(c => ({ id: c.id, slot: c.slot, name: String(c.name).trim().slice(0, 50), min: Math.max(1, Math.min(240, Math.round(Number(c.min) || 20))), how: String(c.how || '').slice(0, 600), mine: true, ing: c.ing.map(i => ({ f: i.f, g: Math.round(i.g), r: i.r })) }));
     const known = id => DISH[id] || s.custom.some(c => c.id === id);
     if (apply) s.custom.forEach(registerCustom);
@@ -112,6 +141,7 @@
   function persist() { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) { /* sin almacenamiento: la página sigue funcionando */ } }
 
   S = load();
+  if (S && (migNote.length || migRec.length)) persist();
   if (!S) {
     const cfg = defaultCfg();
     S = { cfg: cfg, store: 'walmart', budget: 1500, factors: {}, aisleStore: {}, prices: {}, staples: {}, stock: {}, undo: null, prevWeek: null, bought: {}, fav: {}, custom: [], foods: [], weights: [], partner: null, myName: '', example: true, week: blankWeek() };
@@ -286,6 +316,7 @@
     if (recMsg) h += '<div class="banner"><p>' + esc(recMsg) + '</p><a class="btn small" href="#semana" style="text-decoration:none">Ver mi semana</a></div>';
     h += '<p class="hint" style="margin-bottom:10px">' + total + ' recetas con tu dieta. Las cantidades son de partida: al ponerlas en un día se ajustan a tu meta.</p>' +
       '<div class="actions" style="margin-bottom:10px"><button class="btn small" data-act="cr-new">Crear mi receta</button><button class="btn ghost small" data-act="fd-list">Mis ingredientes' + (S.foods.length ? ' (' + S.foods.length + ')' : '') + '</button></div>' +
+      mineSection() +
       '<div class="chips" role="group" aria-label="Filtrar recetas">' + chips.map(c => '<button class="chip" data-act="rec-slot" data-s="' + c[0] + '" aria-pressed="' + (recSlot === c[0]) + '">' + c[1] + '</button>').join('') + '</div>' +
       '<div class="fld" style="margin:10px 0 4px"><label class="sr-only" for="rec-q">Buscar receta</label><input id="rec-q" type="search" placeholder="Buscar por nombre o ingrediente" value="' + esc(recQ) + '" data-act="rec-q"></div>' +
       '<div id="rec-list">' + recListHTML() + '</div>';
@@ -454,7 +485,9 @@
   /* ---------- render ---------- */
   function render() {
     const act = document.activeElement, aid = act && act.id;
-    qs('#view').innerHTML = view === 'compras' ? viewCompras() : view === 'ajustes' ? viewAjustes() : view === 'recetas' ? viewRecetas() : view === 'progreso' ? viewProgreso() : viewSemana();
+    const mig = (migNote.length ? '<div class="banner"><p>' + (migNote.length === 1 ? 'Un ingrediente que propusiste ya está en el catálogo común: ' : migNote.length + ' ingredientes que propusiste ya están en el catálogo común: ') + esc(migNote.join(', ')) + '. Lo cambié en tus recetas y tu despensa, y ya no aparece en «Mis ingredientes».</p></div>' : '') +
+      (migRec.length ? '<div class="banner"><p>' + (migRec.length === 1 ? 'Una receta que propusiste ya está en el menú de todos: ' : migRec.length + ' recetas que propusiste ya están en el menú de todos: ') + esc(migRec.join(', ')) + '. Quedó en tu semana y favoritas, y ya no aparece en «Mis recetas creadas».</p></div>' : ''); migNote = []; migRec = [];
+    qs('#view').innerHTML = mig + (view === 'compras' ? viewCompras() : view === 'ajustes' ? viewAjustes() : view === 'recetas' ? viewRecetas() : view === 'progreso' ? viewProgreso() : viewSemana());
     qs('#view').className = 'v-' + view;
     qsa('.tabs a').forEach(a => a.setAttribute('aria-current', a.dataset.v === view ? 'page' : 'false'));
     const tg = targets(S.cfg), a = dateOf(S.week.start, 0), b = dateOf(S.week.start, 6);
@@ -629,6 +662,13 @@
 
   /* ---------- proponer un ingrediente al catálogo común ---------- */
   const CATALOG_REPO = 'miguelsanchezzam-hub/balanza-y-sazon';
+  /* Telegram de quien administra la app (sin @). Si está vacío, Telegram deja elegir a quién mandarlo. */
+  const TELEGRAM_USER = '';
+  function tgLink(text, act, id) {
+    const url = TELEGRAM_USER ? 'https://t.me/' + TELEGRAM_USER : 'https://t.me/share/url?url=' + encodeURIComponent('https://github.com/' + CATALOG_REPO) + '&text=' + encodeURIComponent(text.slice(0, 3500));
+    return '<a class="btn ghost small" href="' + esc(url) + '" target="_blank" rel="noopener"' + (act ? ' data-act="' + act + '"' + (id ? ' data-id="' + esc(id) + '"' : '') : '') + '>Compartir por Telegram</a>';
+  }
+  const TG_HINT = TELEGRAM_USER ? 'Sin GitHub: toca «Copiar», luego «Compartir por Telegram» y pega el texto en el chat.' : 'Sin GitHub: toca «Compartir por Telegram» y elige el chat de quien administra la app (o copia el texto y mándalo por donde quieras).';
   function foodProblems(f) {
     const out = [], est = 4 * f.p + 4 * (f.c || 0) + 9 * (f.fat || 0);
     if (!(f.k >= 0 && f.k <= 900)) out.push('las calorías deben estar entre 0 y 900 por 100 g');
@@ -647,7 +687,7 @@
     const text = 'Propuesta de ingrediente para el catálogo común (valores por 100 g)\n\n' + f.n + ': ' + fmtN(f.k) + ' kcal · ' + dec(f.p) + ' g proteína · ' + dec(f.c || 0) + ' g carbohidratos · ' + dec(f.fat || 0) + ' g grasa\nPaquete: ' + packLabel(f) + ' a ' + money(f.price) + ' · Pasillo: ' + AISLES[f.aisle] + (o.tags.length ? ' · Etiquetas: ' + o.tags.join(', ') : '') + '\n\n```json\n' + JSON.stringify(o) + '\n```\n';
     const url = 'https://github.com/' + CATALOG_REPO + '/issues/new?labels=propuesta-ingrediente&title=' + encodeURIComponent('Propuesta de ingrediente: ' + f.n) + '&body=' + encodeURIComponent(text);
     textSheet('Proponer al catálogo común', 'Se revisa cada semana: confirmo que las cifras sean coherentes, que no esté repetido y que las etiquetas de dieta sean correctas. Si pasa, queda en la lista de todos en la siguiente versión.', text,
-      '<p style="margin-top:12px"><a class="btn small" href="' + esc(url) + '" target="_blank" rel="noopener">Abrir la propuesta en GitHub</a></p><p class="hint" style="margin-top:8px">Necesitas una cuenta de GitHub para enviarla ahí. Si no tienes, copia el texto y mándaselo a quien administra la app.</p>');
+      '<p style="margin-top:12px"><a class="btn small" href="' + esc(url) + '" target="_blank" rel="noopener" data-act="prop-sent" data-id="' + esc(id) + '">Abrir la propuesta en GitHub</a> ' + tgLink(text, 'prop-sent', id) + '</p><p class="hint" style="margin-top:8px">' + esc(TG_HINT) + '</p>');
   }
 
   /* ---------- compartir precios de tickets con la comunidad ---------- */
@@ -686,13 +726,97 @@
     const text = 'Se enviarán solo estos datos: tienda, producto, precio por paquete, mes. Sin fotos, sin nombre, sin total del ticket.\n\n' + lines.join('\n') + (r.more ? '\n(y ' + r.more + ' más en la siguiente tanda)' : '') + '\n\n' + body;
     const url = 'https://github.com/' + CATALOG_REPO + '/issues/new?labels=propuesta-precios&title=' + encodeURIComponent(title) + '&body=' + encodeURIComponent(body);
     textSheet('Compartir mis precios', 'Cada semana se juntan los precios de todos: se descartan los raros y se usa la mediana, y llegan a todos en la siguiente versión como «precio de la comunidad».', text,
-      '<p style="margin-top:12px"><a class="btn small" href="' + esc(url) + '" target="_blank" rel="noopener" data-act="prices-sent">Abrir en GitHub y enviar</a></p><p class="hint" style="margin-top:8px">Necesitas una cuenta de GitHub. Si no tienes, copia el texto y mándaselo a quien administra la app. Al abrir el enlace marco estos precios como enviados para no repetirlos.' + (r.skipped.length ? ' No se incluyeron por verse muy raros: ' + esc(r.skipped.join('; ')) + '.' : '') + '</p>');
+      '<p style="margin-top:12px"><a class="btn small" href="' + esc(url) + '" target="_blank" rel="noopener" data-act="prices-sent">Abrir en GitHub y enviar</a> ' + tgLink(text, 'prices-sent') + '</p><p class="hint" style="margin-top:8px">' + esc(TG_HINT) + ' Al abrir cualquiera de los dos enlaces marco estos precios como enviados para no repetirlos.' + (r.skipped.length ? ' No se incluyeron por verse muy raros: ' + esc(r.skipped.join('; ')) + '.' : '') + '</p>');
   }
   function pricesMarkSent() {
     if (!priceOut) return; const m = sentMap();
     priceOut.prices.forEach(x => { m[x[0] + '|' + x[1]] = x[2]; }); priceOut.factors.forEach(x => { m['f|' + x[0]] = x[1]; });
     try { localStorage.setItem(SENT_KEY, JSON.stringify(m)); } catch (e) { /* sin almacenamiento */ }
     priceOut = null;
+  }
+
+  /* ---------- enviar todas las propuestas de ingredientes juntas ---------- */
+  const FSENT_KEY = 'bys-food-sent-v1';
+  const foodSent = () => { try { return JSON.parse(localStorage.getItem(FSENT_KEY) || '{}') || {}; } catch (e) { return {}; } };
+  const foodPayload = f => { const o = { n: f.n, k: f.k, p: f.p, c: f.c || 0, fat: f.fat || 0, pack: f.pack, price: f.price, aisle: f.aisle, tags: f.tags || [] }; if (f.unitG) o.unitG = f.unitG; return o; };
+  const foodIsSent = f => foodSent()[f.id] === JSON.stringify(foodPayload(f));
+  function foodMark(ids) {
+    const m = foodSent(); ids.forEach(id => { if (FOODS[id]) m[id] = JSON.stringify(foodPayload(FOODS[id])); });
+    try { localStorage.setItem(FSENT_KEY, JSON.stringify(m)); } catch (e) { /* sin almacenamiento */ }
+  }
+  let bundleOut = [];
+  function bundleSheet() {
+    const todo = [], bad = [];
+    S.foods.forEach(f => { if (foodIsSent(f)) return; const pr = foodProblems(f); if (pr.length) bad.push('«' + f.n + '»: ' + pr.join('; ')); else todo.push(f); });
+    const sendNow = todo.slice(0, 15), warn = bad.length ? ' Hay que corregir antes de enviar: ' + bad.join(' · ') + '.' : '';
+    if (!sendNow.length) {
+      textSheet('Enviar propuestas', S.foods.length ? 'No hay propuestas nuevas por enviar: todos tus ingredientes ya se enviaron o hay que corregirlos.' + warn : 'Todavía no agregas ingredientes propios.', '', ''); qs('#sheet-card .fld').hidden = true; qs('#sheet-card [data-act=copy-text]').hidden = true; return;
+    }
+    bundleOut = sendNow.map(f => f.id);
+    const json = JSON.stringify({ foods: sendNow.map(foodPayload) });
+    const title = 'Propuesta de ingrediente: ' + sendNow.length + (sendNow.length === 1 ? ' ingrediente' : ' ingredientes') + ' (lote)';
+    const body = 'Propuesta de ingredientes para el catálogo común (valores por 100 g):\n' + sendNow.map(f => '- ' + f.n).join('\n') + '\n\n```json\n' + json + '\n```\n';
+    const url = 'https://github.com/' + CATALOG_REPO + '/issues/new?labels=propuesta-ingrediente&title=' + encodeURIComponent(title) + '&body=' + encodeURIComponent(body);
+    const text = sendNow.map(f => f.n + ': ' + fmtN(f.k) + ' kcal · ' + dec(f.p) + ' g proteína · ' + dec(f.c || 0) + ' g carbohidratos · ' + dec(f.fat || 0) + ' g grasa · paquete ' + packLabel(f) + ' a ' + money(f.price)).join('\n') + '\n\n' + body;
+    textSheet('Enviar ' + sendNow.length + (sendNow.length === 1 ? ' propuesta' : ' propuestas') + ' juntas', 'Se revisan cada semana. Cuando uno se aprueba y entra al catálogo común, desaparece de «Mis ingredientes» y tus recetas y despensa pasan a usar el del catálogo.', text,
+      '<p style="margin-top:12px"><a class="btn small" href="' + esc(url) + '" target="_blank" rel="noopener" data-act="bundle-sent">Abrir todas en GitHub y enviar</a> ' + tgLink(text, 'bundle-sent') + '</p><p class="hint" style="margin-top:8px">' + esc(TG_HINT) + ' Al abrir cualquiera de los dos enlaces las marco como enviadas.' + (todo.length > 15 ? ' Son más de 15: el resto va en el siguiente envío.' : '') + esc(warn) + '</p>');
+  }
+
+  /* ---------- mis recetas creadas y proponerlas al menú común ---------- */
+  const RSENT_KEY = 'bys-rec-sent-v1';
+  const recSent = () => { try { return JSON.parse(localStorage.getItem(RSENT_KEY) || '{}') || {}; } catch (e) { return {}; } };
+  function recPayload(c) {
+    const foods = [];
+    const ing = c.ing.map(i => { const f = FOODS[i.f]; if (f && f.mine) { if (!foods.some(x => x.n === f.n)) foods.push(foodPayload(f)); return { n: f.n, g: i.g, r: i.r }; } return { f: i.f, g: i.g, r: i.r }; });
+    const o = { name: c.name, slot: c.slot, min: c.min, how: String(c.how || '').slice(0, 400), ing: ing };
+    if (foods.length) o.foods = foods; return o;
+  }
+  const recIsSent = c => recSent()[c.id] === JSON.stringify(recPayload(c));
+  function recProblems(c) {
+    const out = [], b = dishBase(c);
+    if (c.name.trim().length < 3) out.push('ponle un nombre más claro');
+    if (c.ing.length < 2) out.push('agrega al menos dos ingredientes');
+    if (b.k < (c.slot === 'sna' ? 40 : 100) || b.k > 1500) out.push('las calorías de partida (' + fmtN(b.k) + ') no parecen de una comida');
+    if (c.ing.some(i => FOODS[i.f] && FOODS[i.f].mine && foodProblems(FOODS[i.f]).length)) out.push('revisa las cifras de tus ingredientes propios');
+    return out;
+  }
+  function recText(c) { return c.name + ' (' + SLOT_NAME[c.slot] + ', ' + c.min + ' min)\n' + c.ing.map(i => '- ' + FOODS[i.f].n + ': ' + i.g + ' g').join('\n') + (c.how ? '\n' + String(c.how).slice(0, 400) : ''); }
+  function mineSection() {
+    if (!S.custom.length) return '';
+    const todo = S.custom.filter(c => !recIsSent(c)).length;
+    return '<section class="card" style="margin:6px 0 14px" id="mine-sec"><details' + (S.custom.length <= 4 ? ' open' : '') + '><summary style="cursor:pointer;list-style-position:inside"><h3 class="sec" style="margin:0;display:inline">Mis recetas creadas (' + S.custom.length + ')</h3></summary><p class="hint" style="margin:6px 0 6px">También están en el menú de abajo, con la etiqueta «mía». Puedes proponerlas para que entren al menú de todos.</p>' +
+      '<ul class="cands" style="margin-top:6px">' + S.custom.map(c => '<li class="cand"><div><b>' + esc(c.name) + (recIsSent(c) ? ' <span class="pill">enviada</span>' : '') + '</b><small>' + SLOT_NAME[c.slot] + ' · ' + c.min + ' min · ≈ ' + fmtN(dishBase(c).k) + ' kcal de partida</small></div>' +
+        '<div style="display:grid;gap:6px"><button class="btn ghost small" data-act="cr-edit" data-id="' + c.id + '">Editar</button><button class="btn ghost small" data-act="rec-prop" data-id="' + c.id + '">Proponer</button></div></li>').join('') + '</ul>' +
+      '<div class="actions" style="margin-top:10px"><button class="btn ghost small" data-act="rec-bundle">Enviar todas las recetas' + (todo ? ' (' + todo + ')' : '') + '</button></div></details></section>';
+  }
+  let recOut = [];
+  function recShareSheet(list, warn) {
+    const send = list.slice(0, 3);
+    if (!send.length) { textSheet('Enviar recetas', 'No hay recetas nuevas por enviar: ya se enviaron todas' + (warn ? ' o hay que corregir algo.' : '.') + (warn || ''), '', ''); qs('#sheet-card .fld').hidden = true; qs('#sheet-card [data-act=copy-text]').hidden = true; return; }
+    recOut = send.map(c => c.id);
+    const json = JSON.stringify({ recipes: send.map(recPayload) });
+    const title = 'Propuesta de receta: ' + (send.length === 1 ? send[0].name : send.length + ' recetas (lote)');
+    const human = send.map(recText).join('\n\n');
+    const body = 'Propuesta de recetas para el menú común:\n\n' + human + '\n\n```json\n' + json + '\n```\n';
+    const url = 'https://github.com/' + CATALOG_REPO + '/issues/new?labels=propuesta-receta&title=' + encodeURIComponent(title) + '&body=' + encodeURIComponent(body);
+    textSheet(send.length === 1 ? 'Proponer receta al menú común' : 'Enviar ' + send.length + ' recetas juntas', 'Se revisan cada semana: ingredientes, cantidades y calorías. Cuando se aprueba y entra al menú de todos, desaparece de «Mis recetas creadas» y queda en tu semana y tus favoritas.', body,
+      '<p style="margin-top:12px"><a class="btn small" href="' + esc(url) + '" target="_blank" rel="noopener" data-act="rec-sent">Abrir en GitHub y enviar</a> ' + tgLink('Receta para el menú común:\n\n' + human, 'rec-sent') + '</p><p class="hint" style="margin-top:8px">' + esc(TG_HINT) + ' Al abrir cualquiera de los dos enlaces las marco como enviadas.' + (list.length > 3 ? ' Se envían de 3 en 3: el resto va en el siguiente envío.' : '') + esc(warn || '') + '</p>');
+  }
+  function recProposeOne(id) {
+    const c = S.custom.find(x => x.id === id); if (!c) return;
+    const bad = recProblems(c);
+    if (bad.length) { textSheet('Revisa la receta primero', 'Antes de proponerla hay que corregir esto en «Editar»: ' + bad.join('; ') + '.', '', ''); qs('#sheet-card .fld').hidden = true; qs('#sheet-card [data-act=copy-text]').hidden = true; return; }
+    recShareSheet([c], '');
+  }
+  function recBundle() {
+    const todo = [], bad = [];
+    S.custom.forEach(c => { if (recIsSent(c)) return; const p = recProblems(c); if (p.length) bad.push('«' + c.name + '»: ' + p.join('; ')); else todo.push(c); });
+    recShareSheet(todo, bad.length ? ' Hay que corregir antes de enviar: ' + bad.join(' · ') + '.' : '');
+  }
+  function recMark() {
+    const m = recSent(); recOut.forEach(id => { const c = S.custom.find(x => x.id === id); if (c) m[id] = JSON.stringify(recPayload(c)); });
+    try { localStorage.setItem(RSENT_KEY, JSON.stringify(m)); } catch (e) { /* sin almacenamiento */ } recOut = [];
+    const sec = qs('#mine-sec'); if (sec) sec.outerHTML = mineSection();
   }
   /* ---------- ingredientes propios ---------- */
   let fdDraft = null, fdDelAsk = false, fdWarned = false;
@@ -726,8 +850,8 @@
   function fdListSheet() {
     qs('#sheet-card').setAttribute('aria-labelledby', 'sheet-title');
     openSheet('<div class="sheet-head"><div><h2 id="sheet-title">Mis ingredientes</h2><p class="hint">Alimentos que agregaste además de la lista de la app. Los puedes usar en tus recetas, en la despensa y en las compras.</p></div><button class="btn ghost small" data-act="close">Cerrar</button></div>' +
-      (S.foods.length ? '<ul class="cands" style="margin-top:10px">' + S.foods.map(f => '<li class="cand"><div><b>' + esc(f.n) + '</b><small>' + fmtN(f.k) + ' kcal y ' + dec(f.p) + ' g de proteína por 100 g · paquete de ' + esc(packLabel(f)) + ' a ' + money(f.price) + '</small></div><button class="btn ghost small" data-act="fd-edit" data-id="' + f.id + '" data-from="list">Editar</button><button class="btn ghost small" data-act="fd-prop" data-id="' + f.id + '">Proponer al catálogo común</button></li>').join('') + '</ul>' : '<p class="hint" style="margin-top:12px">Todavía no agregas ingredientes.</p>') +
-      '<div class="actions" style="margin-top:12px"><button class="btn" data-act="fd-new" data-from="list">Crear ingrediente nuevo</button></div>');
+      (S.foods.length ? '<ul class="cands" style="margin-top:10px">' + S.foods.map(f => '<li class="cand"><div><b>' + esc(f.n) + (foodIsSent(f) ? ' <span class="pill">enviada</span>' : '') + '</b><small>' + fmtN(f.k) + ' kcal y ' + dec(f.p) + ' g de proteína por 100 g · paquete de ' + esc(packLabel(f)) + ' a ' + money(f.price) + '</small></div><button class="btn ghost small" data-act="fd-edit" data-id="' + f.id + '" data-from="list">Editar</button><button class="btn ghost small" data-act="fd-prop" data-id="' + f.id + '">Proponer al catálogo común</button></li>').join('') + '</ul>' : '<p class="hint" style="margin-top:12px">Todavía no agregas ingredientes.</p>') +
+      '<div class="actions" style="margin-top:12px"><button class="btn" data-act="fd-new" data-from="list">Crear ingrediente nuevo</button>' + (S.foods.length ? '<button class="btn ghost" data-act="fd-bundle">Enviar todas las propuestas' + (S.foods.filter(f => !foodIsSent(f)).length ? ' (' + S.foods.filter(f => !foodIsSent(f)).length + ')' : '') + '</button>' : '') + '</div>');
   }
   function fdSave() {
     fdRead();
@@ -1324,6 +1448,12 @@
       case 'fd-list': fdListSheet(); break;
       case 'fd-prop': proposalSheet(el.dataset.id); break;
       case 'prices-share': pricesShareSheet(); break;
+      case 'fd-bundle': bundleSheet(); break;
+      case 'rec-prop': recProposeOne(el.dataset.id); break;
+      case 'rec-bundle': recBundle(); break;
+      case 'rec-sent': recMark(); break;
+      case 'bundle-sent': foodMark(bundleOut); bundleOut = []; break;
+      case 'prop-sent': foodMark([el.dataset.id]); break;
       case 'prices-sent': pricesMarkSent(); break;
       case 'fd-edit': { const f = FOODS[el.dataset.id]; if (!f || !f.mine) break; fdDraft = fdFrom(f, el.dataset.from); fdSheet(); break; }
       case 'fd-save': fdSave(); break;
