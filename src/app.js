@@ -687,7 +687,7 @@
     const text = 'Propuesta de ingrediente para el catálogo común (valores por 100 g)\n\n' + f.n + ': ' + fmtN(f.k) + ' kcal · ' + dec(f.p) + ' g proteína · ' + dec(f.c || 0) + ' g carbohidratos · ' + dec(f.fat || 0) + ' g grasa\nPaquete: ' + packLabel(f) + ' a ' + money(f.price) + ' · Pasillo: ' + AISLES[f.aisle] + (o.tags.length ? ' · Etiquetas: ' + o.tags.join(', ') : '') + '\n\n```json\n' + JSON.stringify(o) + '\n```\n';
     const url = 'https://github.com/' + CATALOG_REPO + '/issues/new?labels=propuesta-ingrediente&title=' + encodeURIComponent('Propuesta de ingrediente: ' + f.n) + '&body=' + encodeURIComponent(text);
     textSheet('Proponer al catálogo común', 'Se revisa cada semana: confirmo que las cifras sean coherentes, que no esté repetido y que las etiquetas de dieta sean correctas. Si pasa, queda en la lista de todos en la siguiente versión.', text,
-      '<p style="margin-top:12px"><a class="btn small" href="' + esc(url) + '" target="_blank" rel="noopener" data-act="prop-sent" data-id="' + esc(id) + '">Abrir la propuesta en GitHub</a> ' + tgLink(text, 'prop-sent', id) + '</p><p class="hint" style="margin-top:8px">' + esc(TG_HINT) + '</p>');
+      '<div class="actions" style="margin-top:12px"><a class="btn small" href="' + esc(url) + '" target="_blank" rel="noopener" data-act="prop-sent" data-id="' + esc(id) + '">Abrir la propuesta en GitHub</a> ' + tgLink(text, 'prop-sent', id) + '</div><p class=\"hint\" style="margin-top:8px">' + esc(TG_HINT) + '</p>');
   }
 
   /* ---------- compartir precios de tickets con la comunidad ---------- */
@@ -726,7 +726,7 @@
     const text = 'Se enviarán solo estos datos: tienda, producto, precio por paquete, mes. Sin fotos, sin nombre, sin total del ticket.\n\n' + lines.join('\n') + (r.more ? '\n(y ' + r.more + ' más en la siguiente tanda)' : '') + '\n\n' + body;
     const url = 'https://github.com/' + CATALOG_REPO + '/issues/new?labels=propuesta-precios&title=' + encodeURIComponent(title) + '&body=' + encodeURIComponent(body);
     textSheet('Compartir mis precios', 'Cada semana se juntan los precios de todos: se descartan los raros y se usa la mediana, y llegan a todos en la siguiente versión como «precio de la comunidad».', text,
-      '<p style="margin-top:12px"><a class="btn small" href="' + esc(url) + '" target="_blank" rel="noopener" data-act="prices-sent">Abrir en GitHub y enviar</a> ' + tgLink(text, 'prices-sent') + '</p><p class="hint" style="margin-top:8px">' + esc(TG_HINT) + ' Al abrir cualquiera de los dos enlaces marco estos precios como enviados para no repetirlos.' + (r.skipped.length ? ' No se incluyeron por verse muy raros: ' + esc(r.skipped.join('; ')) + '.' : '') + '</p>');
+      '<div class="actions" style="margin-top:12px"><a class="btn small" href="' + esc(url) + '" target="_blank" rel="noopener" data-act="prices-sent">Abrir en GitHub y enviar</a> ' + tgLink(text, 'prices-sent') + '</div><p class=\"hint\" style="margin-top:8px">' + esc(TG_HINT) + ' Al abrir cualquiera de los dos enlaces marco estos precios como enviados para no repetirlos.' + (r.skipped.length ? ' No se incluyeron por verse muy raros: ' + esc(r.skipped.join('; ')) + '.' : '') + '</p>');
   }
   function pricesMarkSent() {
     if (!priceOut) return; const m = sentMap();
@@ -759,7 +759,7 @@
     const url = 'https://github.com/' + CATALOG_REPO + '/issues/new?labels=propuesta-ingrediente&title=' + encodeURIComponent(title) + '&body=' + encodeURIComponent(body);
     const text = sendNow.map(f => f.n + ': ' + fmtN(f.k) + ' kcal · ' + dec(f.p) + ' g proteína · ' + dec(f.c || 0) + ' g carbohidratos · ' + dec(f.fat || 0) + ' g grasa · paquete ' + packLabel(f) + ' a ' + money(f.price)).join('\n') + '\n\n' + body;
     textSheet('Enviar ' + sendNow.length + (sendNow.length === 1 ? ' propuesta' : ' propuestas') + ' juntas', 'Se revisan cada semana. Cuando uno se aprueba y entra al catálogo común, desaparece de «Mis ingredientes» y tus recetas y despensa pasan a usar el del catálogo.', text,
-      '<p style="margin-top:12px"><a class="btn small" href="' + esc(url) + '" target="_blank" rel="noopener" data-act="bundle-sent">Abrir todas en GitHub y enviar</a> ' + tgLink(text, 'bundle-sent') + '</p><p class="hint" style="margin-top:8px">' + esc(TG_HINT) + ' Al abrir cualquiera de los dos enlaces las marco como enviadas.' + (todo.length > 15 ? ' Son más de 15: el resto va en el siguiente envío.' : '') + esc(warn) + '</p>');
+      '<div class="actions" style="margin-top:12px"><a class="btn small" href="' + esc(url) + '" target="_blank" rel="noopener" data-act="bundle-sent">Abrir todas en GitHub y enviar</a> ' + tgLink(text, 'bundle-sent') + '</div><p class=\"hint\" style="margin-top:8px">' + esc(TG_HINT) + ' Al abrir cualquiera de los dos enlaces las marco como enviadas.' + (todo.length > 15 ? ' Son más de 15: el resto va en el siguiente envío.' : '') + esc(warn) + '</p>');
   }
 
   /* ---------- mis recetas creadas y proponerlas al menú común ---------- */
@@ -800,7 +800,7 @@
     const body = 'Propuesta de recetas para el menú común:\n\n' + human + '\n\n```json\n' + json + '\n```\n';
     const url = 'https://github.com/' + CATALOG_REPO + '/issues/new?labels=propuesta-receta&title=' + encodeURIComponent(title) + '&body=' + encodeURIComponent(body);
     textSheet(send.length === 1 ? 'Proponer receta al menú común' : 'Enviar ' + send.length + ' recetas juntas', 'Se revisan cada semana: ingredientes, cantidades y calorías. Cuando se aprueba y entra al menú de todos, desaparece de «Mis recetas creadas» y queda en tu semana y tus favoritas.', body,
-      '<p style="margin-top:12px"><a class="btn small" href="' + esc(url) + '" target="_blank" rel="noopener" data-act="rec-sent">Abrir en GitHub y enviar</a> ' + tgLink('Receta para el menú común:\n\n' + human, 'rec-sent') + '</p><p class="hint" style="margin-top:8px">' + esc(TG_HINT) + ' Al abrir cualquiera de los dos enlaces las marco como enviadas.' + (list.length > 3 ? ' Se envían de 3 en 3: el resto va en el siguiente envío.' : '') + esc(warn || '') + '</p>');
+      '<div class="actions" style="margin-top:12px"><a class="btn small" href="' + esc(url) + '" target="_blank" rel="noopener" data-act="rec-sent">Abrir en GitHub y enviar</a> ' + tgLink('Receta para el menú común:\n\n' + human, 'rec-sent') + '</div><p class=\"hint\" style="margin-top:8px">' + esc(TG_HINT) + ' Al abrir cualquiera de los dos enlaces las marco como enviadas.' + (list.length > 3 ? ' Se envían de 3 en 3: el resto va en el siguiente envío.' : '') + esc(warn || '') + '</p>');
   }
   function recProposeOne(id) {
     const c = S.custom.find(x => x.id === id); if (!c) return;
