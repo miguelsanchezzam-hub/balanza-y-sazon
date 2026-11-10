@@ -663,12 +663,12 @@
   /* ---------- proponer un ingrediente al catálogo común ---------- */
   const CATALOG_REPO = 'miguelsanchezzam-hub/balanza-y-sazon';
   /* Telegram de quien administra la app (sin @). Si está vacío, Telegram deja elegir a quién mandarlo. */
-  const TELEGRAM_USER = '';
+  const TELEGRAM_USER = 'mickeysanchez98';
   function tgLink(text, act, id) {
     const url = TELEGRAM_USER ? 'https://t.me/' + TELEGRAM_USER : 'https://t.me/share/url?url=' + encodeURIComponent('https://github.com/' + CATALOG_REPO) + '&text=' + encodeURIComponent(text.slice(0, 3500));
-    return '<a class="btn ghost small" href="' + esc(url) + '" target="_blank" rel="noopener"' + (act ? ' data-act="' + act + '"' + (id ? ' data-id="' + esc(id) + '"' : '') : '') + '>Compartir por Telegram</a>';
+    return '<a class="btn ghost small" href="' + esc(url) + '" target="_blank" rel="noopener"' + (TELEGRAM_USER ? ' data-tgcopy="1"' : '') + (act ? ' data-act="' + act + '"' + (id ? ' data-id="' + esc(id) + '"' : '') : '') + '>Compartir por Telegram</a>';
   }
-  const TG_HINT = TELEGRAM_USER ? 'Sin GitHub: toca «Copiar», luego «Compartir por Telegram» y pega el texto en el chat.' : 'Sin GitHub: toca «Compartir por Telegram» y elige el chat de quien administra la app (o copia el texto y mándalo por donde quieras).';
+  const TG_HINT = TELEGRAM_USER ? 'Sin GitHub: toca «Compartir por Telegram»; copio el texto y abro el chat, solo pégalo y envíalo (si no se copió, toca «Copiar» primero).' : 'Sin GitHub: toca «Compartir por Telegram» y elige el chat de quien administra la app (o copia el texto y mándalo por donde quieras).';
   function foodProblems(f) {
     const out = [], est = 4 * f.p + 4 * (f.c || 0) + 9 * (f.fat || 0);
     if (!(f.k >= 0 && f.k <= 900)) out.push('las calorías deben estar entre 0 y 900 por 100 g');
@@ -1563,6 +1563,8 @@
   }
 
   document.addEventListener('click', e => {
+    const tg = e.target.closest('a[data-tgcopy]');
+    if (tg) { const ta = qs('#share-text'); if (ta) { try { navigator.clipboard.writeText(ta.value).catch(() => {}); } catch (er) { /* sin portapapeles */ } } }
     const b = e.target.closest('button[data-act], a[data-act]');
     if (b) act(b.dataset.act, b);
   });

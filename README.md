@@ -77,7 +77,7 @@ Cada ingrediente propio tiene el botón **Proponer al catálogo común**: abre u
 
 ## Recetas de la comunidad
 
-Tus recetas creadas aparecen arriba en **Recetas → Mis recetas creadas**, además de en el menú general con la etiqueta «mía». Cada una tiene **Proponer**, y hay **Enviar todas las recetas** (de 3 en 3). Las aprobadas pasan al menú de todos (`MORE_DISHES` en `src/data.js`) y desaparecen de tu sección propia sin perder tu semana ni tus favoritas. Si no tienes cuenta de GitHub, cada pantalla de envío tiene **Compartir por Telegram**; para que abra directo el chat del administrador, escribe su usuario (sin @) en `TELEGRAM_USER` de `src/app.js`.
+Tus recetas creadas aparecen arriba en **Recetas → Mis recetas creadas**, además de en el menú general con la etiqueta «mía». Cada una tiene **Proponer**, y hay **Enviar todas las recetas** (de 3 en 3). Las aprobadas pasan al menú de todos (`MORE_DISHES` en `src/data.js`) y desaparecen de tu sección propia sin perder tu semana ni tus favoritas. Si no tienes cuenta de GitHub, cada pantalla de envío tiene **Compartir por Telegram**; abre directo el chat del administrador (usuario en `TELEGRAM_USER` de `src/app.js`) y copia el texto para pegarlo.
 
 ## Precios de la comunidad
 
