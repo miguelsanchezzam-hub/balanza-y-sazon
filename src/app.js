@@ -626,6 +626,29 @@
       '<div class="actions"><button class="btn" data-act="cr-save">Guardar receta</button><button class="btn ghost" data-act="close">Cancelar</button>' + (d.id ? (crDelAsk ? '<button class="btn ghost" data-act="cr-del2">Sí, borrarla</button>' : '<button class="btn ghost" data-act="cr-del">Borrar receta</button>') : '') + '</div>');
     crSumUpdate();
   }
+
+  /* ---------- proponer un ingrediente al catálogo común ---------- */
+  const CATALOG_REPO = 'miguelsanchezzam-hub/balanza-y-sazon';
+  function foodProblems(f) {
+    const out = [], est = 4 * f.p + 4 * (f.c || 0) + 9 * (f.fat || 0);
+    if (!(f.k >= 0 && f.k <= 900)) out.push('las calorías deben estar entre 0 y 900 por 100 g');
+    if (f.p + (f.c || 0) + (f.fat || 0) > 101) out.push('proteína + carbohidratos + grasa suman más de 100 g por cada 100 g');
+    if (f.p * 4 > f.k * 1.1 + 5) out.push('la proteína aporta más calorías de las que declaras');
+    if ((f.c || f.fat) && Math.abs(est - f.k) > Math.max(40, 0.35 * f.k)) out.push('las calorías (' + fmtN(f.k) + ') no coinciden con lo que suman los macros (≈ ' + fmtN(est) + ')');
+    if (!(f.c || f.fat) && f.k > 40 + 4 * f.p) out.push('faltan carbohidratos o grasa: con solo la proteína no se llega a esas calorías');
+    return out;
+  }
+  function proposalSheet(id) {
+    const f = FOODS[id]; if (!f || !f.mine) return;
+    const bad = foodProblems(f);
+    if (bad.length) { textSheet('Revisa las cifras primero', 'Antes de proponerlo al catálogo común hay que corregir esto en «Editar»: ' + bad.join('; ') + '.', '', ''); qs('#sheet-card .fld').hidden = true; qs('#sheet-card [data-act=copy-text]').hidden = true; return; }
+    const o = { n: f.n, k: f.k, p: f.p, c: f.c || 0, fat: f.fat || 0, pack: f.pack, price: f.price, aisle: f.aisle, tags: f.tags || [] };
+    if (f.unitG) o.unitG = f.unitG;
+    const text = 'Propuesta de ingrediente para el catálogo común (valores por 100 g)\n\n' + f.n + ': ' + fmtN(f.k) + ' kcal · ' + dec(f.p) + ' g proteína · ' + dec(f.c || 0) + ' g carbohidratos · ' + dec(f.fat || 0) + ' g grasa\nPaquete: ' + packLabel(f) + ' a ' + money(f.price) + ' · Pasillo: ' + AISLES[f.aisle] + (o.tags.length ? ' · Etiquetas: ' + o.tags.join(', ') : '') + '\n\n```json\n' + JSON.stringify(o) + '\n```\n';
+    const url = 'https://github.com/' + CATALOG_REPO + '/issues/new?labels=propuesta-ingrediente&title=' + encodeURIComponent('Propuesta de ingrediente: ' + f.n) + '&body=' + encodeURIComponent(text);
+    textSheet('Proponer al catálogo común', 'Se revisa cada semana: confirmo que las cifras sean coherentes, que no esté repetido y que las etiquetas de dieta sean correctas. Si pasa, queda en la lista de todos en la siguiente versión.', text,
+      '<p style="margin-top:12px"><a class="btn small" href="' + esc(url) + '" target="_blank" rel="noopener">Abrir la propuesta en GitHub</a></p><p class="hint" style="margin-top:8px">Necesitas una cuenta de GitHub para enviarla ahí. Si no tienes, copia el texto y mándaselo a quien administra la app.</p>');
+  }
   /* ---------- ingredientes propios ---------- */
   let fdDraft = null, fdDelAsk = false, fdWarned = false;
   const fdBlank = from => ({ id: null, n: '', base: '100', k: '', p: '', c: '', fat: '', pieceG: '', pack: '500', price: '', aisle: 4, tags: [], from: from || 'list' });
@@ -658,7 +681,7 @@
   function fdListSheet() {
     qs('#sheet-card').setAttribute('aria-labelledby', 'sheet-title');
     openSheet('<div class="sheet-head"><div><h2 id="sheet-title">Mis ingredientes</h2><p class="hint">Alimentos que agregaste además de la lista de la app. Los puedes usar en tus recetas, en la despensa y en las compras.</p></div><button class="btn ghost small" data-act="close">Cerrar</button></div>' +
-      (S.foods.length ? '<ul class="cands" style="margin-top:10px">' + S.foods.map(f => '<li class="cand"><div><b>' + esc(f.n) + '</b><small>' + fmtN(f.k) + ' kcal y ' + dec(f.p) + ' g de proteína por 100 g · paquete de ' + esc(packLabel(f)) + ' a ' + money(f.price) + '</small></div><button class="btn ghost small" data-act="fd-edit" data-id="' + f.id + '" data-from="list">Editar</button></li>').join('') + '</ul>' : '<p class="hint" style="margin-top:12px">Todavía no agregas ingredientes.</p>') +
+      (S.foods.length ? '<ul class="cands" style="margin-top:10px">' + S.foods.map(f => '<li class="cand"><div><b>' + esc(f.n) + '</b><small>' + fmtN(f.k) + ' kcal y ' + dec(f.p) + ' g de proteína por 100 g · paquete de ' + esc(packLabel(f)) + ' a ' + money(f.price) + '</small></div><button class="btn ghost small" data-act="fd-edit" data-id="' + f.id + '" data-from="list">Editar</button><button class="btn ghost small" data-act="fd-prop" data-id="' + f.id + '">Proponer al catálogo común</button></li>').join('') + '</ul>' : '<p class="hint" style="margin-top:12px">Todavía no agregas ingredientes.</p>') +
       '<div class="actions" style="margin-top:12px"><button class="btn" data-act="fd-new" data-from="list">Crear ingrediente nuevo</button></div>');
   }
   function fdSave() {
@@ -1253,6 +1276,7 @@
         fdSheet(); break;
       }
       case 'fd-list': fdListSheet(); break;
+      case 'fd-prop': proposalSheet(el.dataset.id); break;
       case 'fd-edit': { const f = FOODS[el.dataset.id]; if (!f || !f.mine) break; fdDraft = fdFrom(f, el.dataset.from); fdSheet(); break; }
       case 'fd-save': fdSave(); break;
       case 'fd-cancel': fdBack(); break;

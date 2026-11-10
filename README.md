@@ -71,6 +71,10 @@ tests/run.sh          ← pruebas del motor
 - **Que el lector de tickets reconozca otro producto:** `TK_ALIAS` en `src/local.js` (raíces de palabras como salen impresas, por ejemplo `pech` para «PECH POLLO»).
 - **Tiendas y factores de precio:** `STORES` en `src/data.js`.
 
+## Catálogo común
+
+Cada ingrediente propio tiene el botón **Proponer al catálogo común**: abre una propuesta (un *issue*) en este repositorio con las cifras ya escritas. Una vez por semana se revisan (cifras coherentes, sin repetidos, etiquetas de dieta; reglas en `catalog/REVIEW.md`) y las que pasan entran en `MORE_FOODS` y llegan a todas las personas con la siguiente versión. Mientras tanto el ingrediente sigue disponible en tu propio dispositivo.
+
 ## Pruebas
 
 `./tests/run.sh` corre las pruebas del motor: cada perfil de dieta debe cumplir la meta de calorías y proteína en los 140 días de prueba, y las sustituciones y la despensa se verifican por separado.
