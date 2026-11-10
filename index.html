@@ -1481,7 +1481,10 @@ const IMGS = {"des": "data:image/webp;base64,UklGRjgYAABXRUJQVlA4ICwYAABwXACdASr
     return c && typeof c.id === 'string' && /^c_[a-z0-9]+$/.test(c.id) && SLOTS_ALL.indexOf(c.slot) >= 0 && typeof c.name === 'string' && c.name.trim().length >= 1 &&
       Array.isArray(c.ing) && c.ing.length >= 1 && c.ing.every(i => i && (FOODS[i.f] || (cf || []).some(x => x.id === i.f)) && isFinite(i.g) && i.g > 0 && i.g <= 2000 && ['P', 'B', 'V'].indexOf(i.r) >= 0);
   }
-  function registerCustom(c) { const i = DISHES.findIndex(d => d.id === c.id); if (i >= 0) DISHES[i] = c; else DISHES.push(c); DISH[c.id] = c; }
+  const clampServ = v => { const n = Math.round(Number(v)); return isFinite(n) ? Math.max(1, Math.min(12, n)) : 1; };
+  /* S.custom guarda la receta completa (gramos totales y para cuántas personas); el menú usa la porción de UNA persona */
+  function perPerson(c) { const n = clampServ(c.serv); return Object.assign({}, c, { serv: n, ing: c.ing.map(i => ({ f: i.f, g: n > 1 ? Math.round(i.g / n * 10) / 10 : i.g, r: i.r })) }); }
+  function registerCustom(c) { const d = perPerson(c), i = DISHES.findIndex(x => x.id === c.id); if (i >= 0) DISHES[i] = d; else DISHES.push(d); DISH[c.id] = d; }
   function unregisterCustom(id) { const i = DISHES.findIndex(d => d.id === id); if (i >= 0) DISHES.splice(i, 1); delete DISH[id]; }
   function cleanCfg(c) {
     if (!c || typeof c !== 'object') return null;
@@ -1532,7 +1535,7 @@ const IMGS = {"des": "data:image/webp;base64,UklGRjgYAABXRUJQVlA4ICwYAABwXACdASr
         if (s.fav && typeof s.fav === 'object') Object.keys(rmap).forEach(o => { if (o in s.fav) { s.fav[rmap[o]] = s.fav[o]; delete s.fav[o]; } });
       }
     }
-    s.custom = (Array.isArray(s.custom) ? s.custom : []).filter(c => validCustom(c, s.foods)).map(c => ({ id: c.id, slot: c.slot, name: String(c.name).trim().slice(0, 50), min: Math.max(1, Math.min(240, Math.round(Number(c.min) || 20))), how: String(c.how || '').slice(0, 600), mine: true, ing: c.ing.map(i => ({ f: i.f, g: Math.round(i.g), r: i.r })) }));
+    s.custom = (Array.isArray(s.custom) ? s.custom : []).filter(c => validCustom(c, s.foods)).map(c => ({ id: c.id, slot: c.slot, name: String(c.name).trim().slice(0, 50), min: Math.max(1, Math.min(240, Math.round(Number(c.min) || 20))), how: String(c.how || '').slice(0, 600), mine: true, serv: clampServ(c.serv), ing: c.ing.map(i => ({ f: i.f, g: Math.round(i.g), r: i.r })) }));
     const known = id => DISH[id] || s.custom.some(c => c.id === id);
     if (apply) s.custom.forEach(registerCustom);
     for (const d of s.week.days) {
@@ -1711,8 +1714,8 @@ const IMGS = {"des": "data:image/webp;base64,UklGRjgYAABXRUJQVlA4ICwYAABwXACdASr
     if (recSlot === 'mine') list = list.filter(d => d.mine);
     if (q) list = list.filter(d => norm(d.name + ' ' + d.ing.map(i => FOODS[i.f].n).join(' ')).indexOf(norm(q)) >= 0);
     list = list.filter(d => S.fav[d.id]).concat(list.filter(d => !S.fav[d.id]));
-    if (!list.length) return '<p class="hint" style="margin-top:12px">' + (recSlot === 'fav' && !q ? 'Aún no tienes favoritas. Abre una receta y toca «Marcar favorita».' : recSlot === 'mine' && !q ? 'Aún no creaste recetas. Toca «Crear mi receta».' : 'No hay recetas con ese filtro y tu dieta.') + '</p>';
-    return '<ul class="meals" style="margin-top:6px">' + list.map(d => {
+    if (!list.length) return (recSlot === 'mine' ? recBundleBar() : '') + '<p class="hint" style="margin-top:12px">' + (recSlot === 'fav' && !q ? 'Aún no tienes favoritas. Abre una receta y toca «Marcar favorita».' : recSlot === 'mine' && !q ? 'Aún no creaste recetas. Toca «Crear mi receta».' : 'No hay recetas con ese filtro y tu dieta.') + '</p>';
+    return (recSlot === 'mine' ? recBundleBar() : '') + '<ul class="meals" style="margin-top:6px">' + list.map(d => {
       const key = 'r-' + d.id, isOpen = open.has(key), b = dishBase(d), fav = !!S.fav[d.id];
       const ids = Array.from(new Set(d.ing.map(i => i.f))), n = ids.filter(f => have.has(f)).length;
       return '<li class="meal"><button class="mhd" data-act="toggle" data-key="' + key + '" aria-expanded="' + isOpen + '">' + thumb(dishImg(d)) + '<span class="slot">' + SLOT_NAME[d.slot] + ' · ' + d.min + ' min' + (d.mine ? ' · mía' : '') + '</span>' +
@@ -1721,7 +1724,7 @@ const IMGS = {"des": "data:image/webp;base64,UklGRjgYAABXRUJQVlA4ICwYAABwXACdASr
         (d.how ? '<p class="how">' + esc(d.how) + '</p>' : '') + (n ? '<p class="after" style="margin:0 0 10px">Ya tienes ' + n + ' de ' + ids.length + ' ingredientes en casa.</p>' : '') +
         '<div class="actions"><button class="btn small" data-act="place" data-id="' + d.id + '">Ponerla en un día</button>' +
         '<button class="btn ghost small" data-act="fav" data-id="' + d.id + '">' + (fav ? 'Quitar de favoritas' : 'Marcar favorita') + '</button>' +
-        (d.mine ? '<button class="btn ghost small" data-act="cr-edit" data-id="' + d.id + '">Editar</button>' : '') + '</div></div></li>';
+        (d.mine && recSlot === 'mine' ? '<button class="btn ghost small" data-act="cr-edit" data-id="' + d.id + '">Editar</button><button class="btn ghost small" data-act="rec-prop" data-id="' + d.id + '">Proponer al menú común</button>' + (recIsSentId(d.id) ? '<span class="pill">enviada</span>' : '') : '') + '</div>' + (d.mine && d.serv > 1 ? '<p class="hint" style="margin-top:6px">Receta para ' + d.serv + ' personas. Aquí ves la porción de una.</p>' : '') + '</div></li>';
     }).join('') + '</ul>';
   }
   function viewRecetas() {
@@ -1731,7 +1734,6 @@ const IMGS = {"des": "data:image/webp;base64,UklGRjgYAABXRUJQVlA4ICwYAABwXACdASr
     if (recMsg) h += '<div class="banner"><p>' + esc(recMsg) + '</p><a class="btn small" href="#semana" style="text-decoration:none">Ver mi semana</a></div>';
     h += '<p class="hint" style="margin-bottom:10px">' + total + ' recetas con tu dieta. Las cantidades son de partida: al ponerlas en un día se ajustan a tu meta.</p>' +
       '<div class="actions" style="margin-bottom:10px"><button class="btn small" data-act="cr-new">Crear mi receta</button><button class="btn ghost small" data-act="fd-list">Mis ingredientes' + (S.foods.length ? ' (' + S.foods.length + ')' : '') + '</button></div>' +
-      mineSection() +
       '<div class="chips" role="group" aria-label="Filtrar recetas">' + chips.map(c => '<button class="chip" data-act="rec-slot" data-s="' + c[0] + '" aria-pressed="' + (recSlot === c[0]) + '">' + c[1] + '</button>').join('') + '</div>' +
       '<div class="fld" style="margin:10px 0 4px"><label class="sr-only" for="rec-q">Buscar receta</label><input id="rec-q" type="search" placeholder="Buscar por nombre o ingrediente" value="' + esc(recQ) + '" data-act="rec-q"></div>' +
       '<div id="rec-list">' + recListHTML() + '</div>';
@@ -1901,7 +1903,7 @@ const IMGS = {"des": "data:image/webp;base64,UklGRjgYAABXRUJQVlA4ICwYAABwXACdASr
   function render() {
     const act = document.activeElement, aid = act && act.id;
     const mig = (migNote.length ? '<div class="banner"><p>' + (migNote.length === 1 ? 'Un ingrediente que propusiste ya está en el catálogo común: ' : migNote.length + ' ingredientes que propusiste ya están en el catálogo común: ') + esc(migNote.join(', ')) + '. Lo cambié en tus recetas y tu despensa, y ya no aparece en «Mis ingredientes».</p></div>' : '') +
-      (migRec.length ? '<div class="banner"><p>' + (migRec.length === 1 ? 'Una receta que propusiste ya está en el menú de todos: ' : migRec.length + ' recetas que propusiste ya están en el menú de todos: ') + esc(migRec.join(', ')) + '. Quedó en tu semana y favoritas, y ya no aparece en «Mis recetas creadas».</p></div>' : ''); migNote = []; migRec = [];
+      (migRec.length ? '<div class="banner"><p>' + (migRec.length === 1 ? 'Una receta que propusiste ya está en el menú de todos: ' : migRec.length + ' recetas que propusiste ya están en el menú de todos: ') + esc(migRec.join(', ')) + '. Quedó en tu semana y favoritas, y ya no aparece en «Mías».</p></div>' : ''); migNote = []; migRec = [];
     qs('#view').innerHTML = mig + (view === 'compras' ? viewCompras() : view === 'ajustes' ? viewAjustes() : view === 'recetas' ? viewRecetas() : view === 'progreso' ? viewProgreso() : viewSemana());
     qs('#view').className = 'v-' + view;
     qsa('.tabs a').forEach(a => a.setAttribute('aria-current', a.dataset.v === view ? 'page' : 'false'));
@@ -2043,7 +2045,7 @@ const IMGS = {"des": "data:image/webp;base64,UklGRjgYAABXRUJQVlA4ICwYAABwXACdASr
   function crRead() {
     if (!crDraft) return;
     const v = id => { const e = qs('#' + id); return e ? e.value : ''; };
-    crDraft.name = v('cr-name'); crDraft.slot = v('cr-slot') || crDraft.slot; crDraft.min = v('cr-min'); crDraft.how = v('cr-how');
+    crDraft.name = v('cr-name'); crDraft.slot = v('cr-slot') || crDraft.slot; crDraft.min = v('cr-min'); crDraft.how = v('cr-how'); crDraft.serv = v('cr-serv') || crDraft.serv;
     crDraft.ing = crDraft.ing.map((i, n) => ({ f: v('cr-f-' + n) || i.f, g: v('cr-g-' + n), r: v('cr-r-' + n) }));
   }
   function crSumUpdate() {
@@ -2051,7 +2053,8 @@ const IMGS = {"des": "data:image/webp;base64,UklGRjgYAABXRUJQVlA4ICwYAABwXACdASr
     crRead();
     const items = crDraft.ing.filter(i => FOODS[i.f] && isFinite(parseFloat(i.g)) && parseFloat(i.g) > 0).map(i => itemFor(i.f, parseFloat(i.g)));
     const t = sumItems(items);
-    box.textContent = 'Receta de partida: ' + fmtN(t.k) + ' kcal · ' + fmtN(t.p, 1) + ' g de proteína';
+    const n = clampServ(crDraft.serv);
+    box.textContent = n > 1 ? 'Receta completa: ' + fmtN(t.k) + ' kcal · ' + fmtN(t.p, 1) + ' g de proteína. Por persona (entre ' + n + '): ≈ ' + fmtN(t.k / n) + ' kcal · ' + fmtN(t.p / n, 1) + ' g de proteína.' : 'Receta de partida: ' + fmtN(t.k) + ' kcal · ' + fmtN(t.p, 1) + ' g de proteína';
   }
   function crSheet() {
     const d = crDraft;
@@ -2062,10 +2065,12 @@ const IMGS = {"des": "data:image/webp;base64,UklGRjgYAABXRUJQVlA4ICwYAABwXACdASr
       '<button class="link" data-act="cr-rm" data-i="' + n + '">Quitar</button></li>').join('');
     const unitHint = Array.from(new Set(d.ing.map(i => i.f))).filter(f => FOODS[f] && FOODS[f].unitG).map(f => FOODS[f].unitG + ' g = 1 ' + FOODS[f].unit[0]).join(' · ');
     qs('#sheet-card').setAttribute('aria-labelledby', 'sheet-title');
-    openSheet('<div class="sheet-head"><div><h2 id="sheet-title">' + (d.id ? 'Editar mi receta' : 'Crear mi receta') + '</h2><p class="hint">Eliges los ingredientes y los gramos de partida. Al ponerla en un día, la proteína y la base se ajustan a tu meta; lo fijo se queda igual.</p></div><button class="btn ghost small" data-act="close">Cerrar</button></div>' +
+    openSheet('<div class="sheet-head"><div><h2 id="sheet-title">' + (d.id ? 'Editar mi receta' : 'Crear mi receta') + '</h2><p class="hint">Eliges los ingredientes y los gramos. Al ponerla en un día, la proteína y la base se ajustan a tu meta; lo fijo se queda igual.</p></div><button class="btn ghost small" data-act="close">Cerrar</button></div>' +
       '<div class="fields" style="margin-top:12px"><div class="fld"><label for="cr-name">Nombre</label><input id="cr-name" type="text" maxlength="50" value="' + esc(d.name) + '"></div>' +
       '<div class="fld"><label for="cr-slot">Tipo de comida</label><select id="cr-slot">' + SLOTS_ALL.map(k => '<option value="' + k + '"' + (k === d.slot ? ' selected' : '') + '>' + SLOT_NAME[k] + '</option>').join('') + '</select></div>' +
-      '<div class="fld"><label for="cr-min">Minutos</label><input id="cr-min" type="number" inputmode="numeric" min="1" max="240" value="' + esc(d.min) + '"></div></div>' +
+      '<div class="fld"><label for="cr-min">Minutos</label><input id="cr-min" type="number" inputmode="numeric" min="1" max="240" value="' + esc(d.min) + '"></div>' +
+      '<div class="fld"><label for="cr-serv">¿Para cuántas personas es?</label><input id="cr-serv" type="number" inputmode="numeric" min="1" max="12" value="' + esc(d.serv || 1) + '" data-act="cr-sum"></div></div>' +
+      '<p class="hint" style="margin-top:6px">Pon los gramos de toda la receta. La app divide entre las personas y te cuenta solo tu porción.</p>' +
       '<h3 class="sec" style="margin-top:14px">Ingredientes</h3><ul class="crlist">' + rows + '</ul>' +
       '<div class="actions" style="margin-top:8px"><button class="btn ghost small" data-act="cr-add">Agregar ingrediente</button><button class="btn ghost small" data-act="fd-new" data-from="cr">Crear ingrediente nuevo</button></div>' +
       '<p class="hint" style="margin-top:6px">' + esc(unitHint) + '</p>' +
@@ -2184,25 +2189,23 @@ const IMGS = {"des": "data:image/webp;base64,UklGRjgYAABXRUJQVlA4ICwYAABwXACdASr
     const foods = [];
     const ing = c.ing.map(i => { const f = FOODS[i.f]; if (f && f.mine) { if (!foods.some(x => x.n === f.n)) foods.push(foodPayload(f)); return { n: f.n, g: i.g, r: i.r }; } return { f: i.f, g: i.g, r: i.r }; });
     const o = { name: c.name, slot: c.slot, min: c.min, how: String(c.how || '').slice(0, 400), ing: ing };
+    if (clampServ(c.serv) > 1) o.serv = clampServ(c.serv);
     if (foods.length) o.foods = foods; return o;
   }
   const recIsSent = c => recSent()[c.id] === JSON.stringify(recPayload(c));
   function recProblems(c) {
-    const out = [], b = dishBase(c);
+    const out = [], b = dishBase(perPerson(c));
     if (c.name.trim().length < 3) out.push('ponle un nombre más claro');
     if (c.ing.length < 2) out.push('agrega al menos dos ingredientes');
-    if (b.k < (c.slot === 'sna' ? 40 : 100) || b.k > 1500) out.push('las calorías de partida (' + fmtN(b.k) + ') no parecen de una comida');
+    if (b.k < (c.slot === 'sna' ? 40 : 100) || b.k > 1500) out.push('las calorías de partida por persona (' + fmtN(b.k) + ') no parecen de una comida');
     if (c.ing.some(i => FOODS[i.f] && FOODS[i.f].mine && foodProblems(FOODS[i.f]).length)) out.push('revisa las cifras de tus ingredientes propios');
     return out;
   }
-  function recText(c) { return c.name + ' (' + SLOT_NAME[c.slot] + ', ' + c.min + ' min)\n' + c.ing.map(i => '- ' + FOODS[i.f].n + ': ' + i.g + ' g').join('\n') + (c.how ? '\n' + String(c.how).slice(0, 400) : ''); }
-  function mineSection() {
-    if (!S.custom.length) return '';
+  function recText(c) { return c.name + ' (' + SLOT_NAME[c.slot] + ', ' + c.min + ' min' + (clampServ(c.serv) > 1 ? ', receta para ' + clampServ(c.serv) + ' personas' : '') + ')\n' + c.ing.map(i => '- ' + FOODS[i.f].n + ': ' + i.g + ' g').join('\n') + (c.how ? '\n' + String(c.how).slice(0, 400) : ''); }
+  const recIsSentId = id => { const c = S.custom.find(x => x.id === id); return !!c && recIsSent(c); };
+  function recBundleBar() {
     const todo = S.custom.filter(c => !recIsSent(c)).length;
-    return '<section class="card" style="margin:6px 0 14px" id="mine-sec"><details' + (S.custom.length <= 4 ? ' open' : '') + '><summary style="cursor:pointer;list-style-position:inside"><h3 class="sec" style="margin:0;display:inline">Mis recetas creadas (' + S.custom.length + ')</h3></summary><p class="hint" style="margin:6px 0 6px">También están en el menú de abajo, con la etiqueta «mía». Puedes proponerlas para que entren al menú de todos.</p>' +
-      '<ul class="cands" style="margin-top:6px">' + S.custom.map(c => '<li class="cand"><div><b>' + esc(c.name) + (recIsSent(c) ? ' <span class="pill">enviada</span>' : '') + '</b><small>' + SLOT_NAME[c.slot] + ' · ' + c.min + ' min · ≈ ' + fmtN(dishBase(c).k) + ' kcal de partida</small></div>' +
-        '<div style="display:grid;gap:6px"><button class="btn ghost small" data-act="cr-edit" data-id="' + c.id + '">Editar</button><button class="btn ghost small" data-act="rec-prop" data-id="' + c.id + '">Proponer</button></div></li>').join('') + '</ul>' +
-      '<div class="actions" style="margin-top:10px"><button class="btn ghost small" data-act="rec-bundle">Enviar todas las recetas' + (todo ? ' (' + todo + ')' : '') + '</button></div></details></section>';
+    return '<div class="actions" style="margin:10px 0 4px"><button class="btn small" data-act="rec-bundle">Enviar todas las recetas' + (todo ? ' (' + todo + ')' : '') + '</button></div><p class="hint" style="margin-bottom:4px">Abre una receta para editarla o proponerla sola. Las que se aprueben entran al menú de todos.</p>';
   }
   let recOut = [];
   function recShareSheet(list, warn) {
@@ -2214,7 +2217,7 @@ const IMGS = {"des": "data:image/webp;base64,UklGRjgYAABXRUJQVlA4ICwYAABwXACdASr
     const human = send.map(recText).join('\n\n');
     const body = 'Propuesta de recetas para el menú común:\n\n' + human + '\n\n```json\n' + json + '\n```\n';
     const url = 'https://github.com/' + CATALOG_REPO + '/issues/new?labels=propuesta-receta&title=' + encodeURIComponent(title) + '&body=' + encodeURIComponent(body);
-    textSheet(send.length === 1 ? 'Proponer receta al menú común' : 'Enviar ' + send.length + ' recetas juntas', 'Se revisan cada semana: ingredientes, cantidades y calorías. Cuando se aprueba y entra al menú de todos, desaparece de «Mis recetas creadas» y queda en tu semana y tus favoritas.', body,
+    textSheet(send.length === 1 ? 'Proponer receta al menú común' : 'Enviar ' + send.length + ' recetas juntas', 'Se revisan cada semana: ingredientes, cantidades y calorías. Cuando se aprueba y entra al menú de todos, deja de aparecer en «Mías» y queda en tu semana y tus favoritas.', body,
       '<div class="actions" style="margin-top:12px"><a class="btn small" href="' + esc(url) + '" target="_blank" rel="noopener" data-act="rec-sent">Abrir en GitHub y enviar</a> ' + tgLink('Receta para el menú común:\n\n' + human, 'rec-sent') + '</div><p class=\"hint\" style="margin-top:8px">' + esc(TG_HINT) + ' Al abrir cualquiera de los dos enlaces las marco como enviadas.' + (list.length > 3 ? ' Se envían de 3 en 3: el resto va en el siguiente envío.' : '') + esc(warn || '') + '</p>');
   }
   function recProposeOne(id) {
@@ -2231,7 +2234,7 @@ const IMGS = {"des": "data:image/webp;base64,UklGRjgYAABXRUJQVlA4ICwYAABwXACdASr
   function recMark() {
     const m = recSent(); recOut.forEach(id => { const c = S.custom.find(x => x.id === id); if (c) m[id] = JSON.stringify(recPayload(c)); });
     try { localStorage.setItem(RSENT_KEY, JSON.stringify(m)); } catch (e) { /* sin almacenamiento */ } recOut = [];
-    const sec = qs('#mine-sec'); if (sec) sec.outerHTML = mineSection();
+    const box = qs('#rec-list'); if (box) box.innerHTML = recListHTML();
   }
   /* ---------- ingredientes propios ---------- */
   let fdDraft = null, fdDelAsk = false, fdWarned = false;
@@ -2311,11 +2314,13 @@ const IMGS = {"des": "data:image/webp;base64,UklGRjgYAABXRUJQVlA4ICwYAABwXACdASr
       if (seen.has(i.f)) { msg.textContent = 'Agregaste dos veces ' + FOODS[i.f].n.toLowerCase() + '. Junta los gramos en una sola fila.'; return; }
       seen.add(i.f); ing.push({ f: i.f, g: Math.round(g), r: i.r || crAuto(i.f) });
     }
-    const t = sumItems(ing.map(i => itemFor(i.f, i.g)));
-    if (t.k < 80 || t.k > 2500) { msg.textContent = 'La receta suma ' + fmtN(t.k) + ' kcal. Debe quedar entre 80 y 2,500; revisa los gramos.'; return; }
+    const sv = Math.round(parseFloat(d.serv));
+    if (!isFinite(sv) || sv < 1 || sv > 12) { msg.textContent = 'Personas: un número entre 1 y 12.'; return; }
+    const t = sumItems(ing.map(i => itemFor(i.f, i.g))), tp = t.k / sv;
+    if (tp < 80 || tp > 2500) { msg.textContent = (sv > 1 ? 'Tu porción (' + fmtN(tp) + ' kcal, de ' + fmtN(t.k) + ' entre ' + sv + ')' : 'La receta suma ' + fmtN(t.k) + ' kcal') + ' debe quedar entre 80 y 2,500; revisa los gramos' + (sv > 1 ? ' o las personas' : '') + '.'; return; }
     if (!ing.some(i => i.r !== 'V')) { msg.textContent = 'Al menos un ingrediente debe ajustarse (proteína o base); si no, la porción no puede cambiar.'; return; }
-    const obj = d.id ? DISH[d.id] : { id: 'c_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5), mine: true };
-    Object.assign(obj, { slot: d.slot, name: name.slice(0, 50), min: isFinite(min) ? Math.max(1, Math.min(240, min)) : 20, how: d.how.trim().slice(0, 600), ing: ing });
+    const obj = d.id ? S.custom.find(c => c.id === d.id) : { id: 'c_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5), mine: true };
+    Object.assign(obj, { slot: d.slot, name: name.slice(0, 50), min: isFinite(min) ? Math.max(1, Math.min(240, min)) : 20, how: d.how.trim().slice(0, 600), serv: sv, ing: ing });
     if (!d.id) S.custom.push(obj);
     registerCustom(obj);
     persist(); crDraft = null; crDelAsk = false; closeSheet();
@@ -2324,7 +2329,7 @@ const IMGS = {"des": "data:image/webp;base64,UklGRjgYAABXRUJQVlA4ICwYAABwXACdASr
   function crDelete() {
     const id = crDraft && crDraft.id; if (!id) return;
     S.week.days.forEach(dd => { for (const k of Object.keys(dd.dishes)) if (dd.dishes[k] === id) { delete dd.dishes[k]; if (dd.subs) delete dd.subs[k]; if (dd.ate) delete dd.ate[k]; } });
-    S.custom = S.custom.filter(c => c.id !== id); delete S.fav[id]; unregisterCustom(id);
+    S.custom = S.custom.filter(c => c.id !== id); delete S.fav[id]; unregisterCustom(id); if (!S.custom.length && recSlot === 'mine') recSlot = 'all';
     persist(); crDraft = null; crDelAsk = false; closeSheet(); recMsg = 'Receta borrada.'; render();
   }
 
@@ -2846,8 +2851,8 @@ const IMGS = {"des": "data:image/webp;base64,UklGRjgYAABXRUJQVlA4ICwYAABwXACdASr
         S.prevWeek = null; persist(); closeSheet(); render(); break;
       }
       case 'sub-clear': { const dd = S.week.days[+el.dataset.d]; if (dd.subs) delete dd.subs[el.dataset.s]; persist(); render(); break; }
-      case 'cr-new': crDraft = { id: null, name: '', slot: recSlot !== 'all' && SLOTS_ALL.indexOf(recSlot) >= 0 ? recSlot : 'com', min: 20, how: '', ing: [{ f: 'pollo', g: 150, r: '' }, { f: 'arroz', g: 80, r: '' }] }; crDelAsk = false; crSheet(); break;
-      case 'cr-edit': { const d = DISH[el.dataset.id]; if (!d || !d.mine) break; crDraft = { id: d.id, name: d.name, slot: d.slot, min: d.min, how: d.how || '', ing: d.ing.map(i => ({ f: i.f, g: i.g, r: i.r })) }; crDelAsk = false; crSheet(); break; }
+      case 'cr-new': crDraft = { id: null, name: '', slot: recSlot !== 'all' && SLOTS_ALL.indexOf(recSlot) >= 0 ? recSlot : 'com', min: 20, serv: 1, how: '', ing: [{ f: 'pollo', g: 150, r: '' }, { f: 'arroz', g: 80, r: '' }] }; crDelAsk = false; crSheet(); break;
+      case 'cr-edit': { const d = S.custom.find(c => c.id === el.dataset.id); if (!d) break; crDraft = { id: d.id, name: d.name, slot: d.slot, min: d.min, serv: d.serv || 1, how: d.how || '', ing: d.ing.map(i => ({ f: i.f, g: i.g, r: i.r })) }; crDelAsk = false; crSheet(); break; }
       case 'cr-add': { crRead(); const used = new Set(crDraft.ing.map(i => i.f)); const nf = ['jitomate', 'cebolla', 'zanahoria', 'lechuga', 'aguacate'].concat(Object.keys(FOODS)).find(f => FOODS[f] && !used.has(f)) || 'jitomate'; crDraft.ing.push({ f: nf, g: 100, r: '' }); pk = { ctx: 'cr', i: crDraft.ing.length - 1, q: '', isNew: true }; pickerSheet(); break; }
       case 'pick-food': crRead(); pk = { ctx: 'cr', i: +el.dataset.i, q: '', isNew: false }; pickerSheet(); break;
       case 'pick-add': { const g = qs('#add-g'); if (g) addG = g.value; pk = { ctx: 'add', q: '', isNew: false }; pickerSheet(); break; }

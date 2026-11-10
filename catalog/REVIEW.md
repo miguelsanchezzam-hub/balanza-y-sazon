@@ -35,16 +35,17 @@ Las personas comparten los precios de sus tickets desde la app (Compras → *Com
 
 # Recetas propuestas (menú común)
 
-Llegan como *issues* con el título «Propuesta de receta: …» y un bloque ```json `{"recipes":[{"name","slot","min","how","ing":[…],"foods":[…]}]}` (hasta 3 por envío). `slot` es `des`, `com`, `cen` o `sna`. Cada `ing` trae `f` (id de un alimento de la app) o `n` (nombre de un ingrediente propio de quien propone, cuyos datos van en `foods`), más `g` (gramos) y `r` (`P` proteína, `B` base, `V` fija). Los mensajes de Telegram no se leen solos: si Miguel pega una propuesta en una conversación o en un issue, se revisa igual.
+Llegan como *issues* con el título «Propuesta de receta: …» y un bloque ```json `{"recipes":[{"name","slot","min","how","serv"?,"ing":[…],"foods":[…]}]}` (hasta 3 por envío). `serv` (opcional, 2–12) es para cuántas personas rinde la receta: los `g` son de **toda** la receta. `slot` es `des`, `com`, `cen` o `sna`. Cada `ing` trae `f` (id de un alimento de la app) o `n` (nombre de un ingrediente propio de quien propone, cuyos datos van en `foods`), más `g` (gramos) y `r` (`P` proteína, `B` base, `V` fija). Los mensajes de Telegram no se leen solos: si Miguel pega una propuesta en una conversación o en un issue, se revisa igual.
 
 ## Qué se revisa
 1. **Ingredientes.** Cada `f` debe existir. Cada `n` con su entrada de `foods`: revisarlo con las reglas de ingredientes y agregarlo primero a `MORE_FOODS`; luego usar su `id` nuevo en la receta. Si equivale a uno existente, usar el existente.
-2. **Cantidades y calorías.** `g` entre 1 y 2000 por ingrediente; las calorías de partida (suma de `g × kcal/100`) entre 100 y 1500 (entre 40 y 1500 en `sna`); al menos un ingrediente con rol `P` o `B`; si es plato fuerte, proteína razonable (≥ 10 g).
+2. **Cantidades y calorías.** `g` entre 1 y 2000 por ingrediente; si hay `serv`, las calorías por persona son la suma de `g × kcal/100` dividida entre `serv`. Las calorías de partida por persona entre 100 y 1500 (entre 40 y 1500 en `sna`); al menos un ingrediente con rol `P` o `B`; si es plato fuerte, proteína razonable (≥ 10 g).
 3. **Repetidos.** Mismo platillo ya en `DISHES`/`MORE_DISHES` (nombre sin acentos o muy parecido) → no se agrega.
 4. **Texto.** `how` en español, breve y sin enlaces, teléfonos ni instrucciones peligrosas (comida cruda insegura, etc.). Se puede reescribir para que quede claro.
 5. **Dieta.** No hace falta poner etiquetas: la app las deduce de los ingredientes.
 
 ## Cómo se agrega
+- **Si trae `serv`, dividir cada `g` entre `serv` (un decimal) antes de agregarla**: `MORE_DISHES` guarda siempre la porción de UNA persona.
 - Un objeto nuevo en `MORE_DISHES` de `src/data.js`, igual que los de `DISHES`: `{ id: 'rc_nombre_sin_acentos', slot, name, min, how, ing: [{ f, g, r }], ap: ['nombre con el que se propuso'] }`. Poner `ap` siempre que el nombre cambie.
 - Correr `./tests/run.sh`: ningún perfil de dieta puede quedarse sin días válidos (`fallan 0/…`).
 - `./build.sh`, subir `CACHE` de `sw.js`, subir a `main`, y anotar el issue en `catalog/processed.json`.
