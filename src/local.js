@@ -118,6 +118,18 @@ const TK_ALIAS = {
   platano: ['platano', 'banana', 'tabasco'], manzana: ['manzana'], papaya: ['papaya'], aguacate: ['aguacate', 'hass'], jitomate: ['jitomate', 'jitom', 'tomate', 'saladet'], cebolla: ['cebolla'], espinaca: ['espinaca'], brocoli: ['brocoli'],
   calabacita: ['calabacita', 'calabaza'], zanahoria: ['zanahoria'], nopal: ['nopal'], chayote: ['chayote'], lechuga: ['lechuga'], aceite: ['aceite'], cacahuate: ['cacahuate'], almendra: ['almendra']
 };
+/* alimentos del catálogo ampliado: palabra distintiva del nombre (si nadie la usa ya) más las palabras propias de cada uno */
+(function () {
+  const stop = new Set(['chile', 'filete', 'pechuga', 'carne', 'semilla', 'salsa', 'harina', 'jugo', 'refresco', 'papas', 'galleta', 'cereal', 'maiz', 'nuez', 'pierna', 'costilla', 'chuleta', 'puré', 'pure']);
+  const taken = new Set(); for (const id in TK_ALIAS) TK_ALIAS[id].forEach(a => taken.add(a));
+  for (const id in FOODS) {
+    if (TK_ALIAS[id]) continue;
+    const f = FOODS[id], list = (f.al || []).map(nrm), w = sing(nrm(f.n).split(' ')[0] || '');
+    if (!f.al && w.length >= 4 && !stop.has(w) && !taken.has(w)) list.push(w);
+    list.forEach(a => taken.add(a));
+    TK_ALIAS[id] = list;
+  }
+})();
 function tkMatch(text) {
   const toks = nrm(text).split(' ').filter(Boolean), joined = ' ' + toks.join(' ') + ' ';
   let best = null;

@@ -359,9 +359,9 @@
       h += '<ul class="slist">' + extra.map(k => '<li class="srow"><span class="chk-sp"></span><div class="sinfo"><span class="sname">' + esc(FOODS[k].buy || FOODS[k].n) + '</span><small>No entra en esta semana</small></div><div class="sprice"></div><div class="sub-row"><label class="stk" for="s-' + k + '">En casa <input id="s-' + k + '" type="number" inputmode="numeric" min="0" step="50" value="' + Math.round(S.stock[k]) + '" data-act="stock" data-f="' + k + '"> g</label></div></li>').join('') +
         extraStaples.map(k => '<li class="srow"><span class="chk-sp"></span><div class="sinfo"><span class="sname">' + esc(FOODS[k].buy || FOODS[k].n) + '</span><small>Siempre lo tienes</small></div><div class="sprice"></div><div class="sub-row"><label class="pant"><input type="checkbox" id="p-' + k + '" data-act="staple" data-f="' + k + '" checked> siempre tengo</label></div></li>').join('') + '</ul>';
     }
-    const ids = Object.keys(FOODS).sort((a, b) => (FOODS[a].buy || FOODS[a].n).localeCompare(FOODS[b].buy || FOODS[b].n, 'es'));
-    h += '<div class="priceedit" style="margin-top:6px"><label class="sr-only" for="add-f">Producto</label><select id="add-f" style="background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:9px 10px;max-width:100%">' + ids.map(k => '<option value="' + k + '">' + esc(FOODS[k].buy || FOODS[k].n) + '</option>').join('') + '</select>' +
-      '<label class="sr-only" for="add-g">Gramos en casa</label><input id="add-g" type="number" inputmode="numeric" min="0" step="50" placeholder="gramos" style="width:100px;background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:9px 10px"><button class="btn small" data-act="add-stock">Agregar</button></div>' +
+    if (!FOODS[addPick]) addPick = '';
+    h += '<div class="priceedit" style="margin-top:6px"><input type="hidden" id="add-f" value="' + esc(addPick) + '"><button type="button" class="pickbtn" data-act="pick-add" aria-label="Elegir producto">' + esc(addPick ? foodName(addPick, true) : 'Buscar producto…') + '</button>' +
+      '<label class="sr-only" for="add-g">Gramos en casa</label><input id="add-g" type="number" inputmode="numeric" min="0" step="50" value="' + esc(addG) + '" placeholder="gramos" style="width:100px;background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:9px 10px"><button class="btn small" data-act="add-stock">Agregar</button></div>' +
       '<p class="hint" style="margin-top:6px">Si dejas los gramos vacíos, se agrega como algo que siempre tienes.</p>' +
       '<div class="actions" style="margin-top:10px"><button class="btn ghost small" data-act="rebuild">Sugerirme una semana con lo que tengo</button></div></section>';
     h += '<section class="card" style="margin-top:14px"><h2 style="font-size:18px">Cerrar la semana</h2>';
@@ -522,7 +522,7 @@
     const subs = Object.assign({}, (dd.subs && dd.subs[slot]) || {}), orig = origOf(subs, f), cls = foodClass(orig);
     const inDish = new Set(effIng(dd.dishes[slot], subs).map(i => i.f));
     const label = { P: 'proteína', B: 'base', V: 'verdura o fruta' }[cls];
-    const cands = Object.keys(FOODS).filter(id => id !== f && foodClass(id) === cls && (cls === 'P' || FOODS[id].aisle === FOODS[orig].aisle) && !FOODS[id].tags.some(t => exc.has(t)) && (id === orig || !inDish.has(id))).map(id => {
+    const cands = Object.keys(FOODS).filter(id => id !== f && foodClass(id) === cls && (cls === 'P' || FOODS[id].aisle === FOODS[orig].aisle) && !FOODS[id].tags.some(t => exc.has(t)) && (id === orig || (!inDish.has(id) && !FOODS[id].nosub))).map(id => {
       const ns = Object.assign({}, subs); if (id === orig) delete ns[orig]; else ns[orig] = id;
       const ev = evalDayAny(defsOf({ dishes: dd.dishes, outs: dd.outs, subs: Object.assign({}, dd.subs, { [slot]: ns }) }), tg.k, tg.p, ex);
       const m = ev.meals.find(x => x.slot === slot), it = m && m.items.find(x => x.f === id);
@@ -530,7 +530,65 @@
     }).sort((a, b) => (b.ev.ok ? 1 : 0) - (a.ev.ok ? 1 : 0) || FOODS[a.id].n.localeCompare(FOODS[b.id].n, 'es'));
     qs('#sheet-card').setAttribute('aria-labelledby', 'sheet-title');
     openSheet('<div class="sheet-head"><div><h2 id="sheet-title">Cambiar: ' + esc(FOODS[f].n) + '</h2><p class="hint">Opciones de ' + label + ' para ' + esc(DISH[dd.dishes[slot]].name.toLowerCase()) + '. La cantidad se ajusta a la meta del día.</p></div><button class="btn ghost small" data-act="close">Cerrar</button></div>' +
-      (cands.length ? '<ul class="cands">' + cands.map(x => '<li class="cand"><div><b>' + esc(FOODS[x.id].n) + (x.id === orig ? ' (original)' : '') + '</b><small>' + (x.g ? '≈ ' + qtyText({ f: x.id, g: x.g }) : '') + '</small><div class="after">' + afterText(x.ev, tg) + '</div></div><button class="btn small" data-act="sub-apply" data-d="' + di + '" data-s="' + slot + '" data-o="' + orig + '" data-id="' + x.id + '">Elegir</button></li>').join('') + '</ul>' : '<p class="hint" style="margin-top:12px">No hay otro alimento parecido que encaje con tu dieta.</p>'));
+      (cands.length ? (cands.length > 6 ? '<div class="fld" style="margin-top:10px"><label for="sub-q">Buscar en estas opciones</label><input id="sub-q" type="search" data-act="sub-q" autocomplete="off" placeholder="Ej.: pavo, pescado, mango…"></div><p class="hint" id="sub-empty" hidden style="margin-top:8px">Ninguna opción encaja con esa palabra.</p>' : '') + '<ul class="cands">' + cands.map(x => '<li class="cand" data-s="' + esc(nrm(FOODS[x.id].n + ' ' + (FOODS[x.id].kw || ''))) + '"><div><b>' + esc(FOODS[x.id].n) + (x.id === orig ? ' (original)' : '') + '</b><small>' + (x.g ? '≈ ' + qtyText({ f: x.id, g: x.g }) : '') + '</small><div class="after">' + afterText(x.ev, tg) + '</div></div><button class="btn small" data-act="sub-apply" data-d="' + di + '" data-s="' + slot + '" data-o="' + orig + '" data-id="' + x.id + '">Elegir</button></li>').join('') + '</ul>' : '<p class="hint" style="margin-top:12px">No hay otro alimento parecido que encaje con tu dieta.</p>'));
+  }
+
+
+  /* ---------- buscador de ingredientes ---------- */
+  let pk = null, addPick = '', addG = '';
+  const foodName = (id, buy) => { const f = FOODS[id]; return f ? ((buy && f.buy) || f.n) : ''; };
+  function foodSearch(q, buy) {
+    const toks = nrm(q).split(' ').filter(Boolean), out = [];
+    for (const id in FOODS) {
+      const f = FOODS[id], nm = nrm(foodName(id, buy) + ' ' + f.n), hay = nm + ' ' + nrm(f.kw || '');
+      let score = 0, ok = true;
+      for (const t of toks) {
+        const vs = [t, sing(t), t.replace(/es$/, '')].filter(x => x.length >= 2);
+        let best = 9;
+        for (const v of vs) {
+          if (nm.split(' ').some(w => w.indexOf(v) === 0)) best = Math.min(best, nm.indexOf(v) === 0 ? 0 : 1);
+          else if (nm.indexOf(v) >= 0) best = Math.min(best, 2);
+          else if (hay.split(' ').some(w => w.indexOf(v) === 0)) best = Math.min(best, 3);
+          else if (t.length >= 4 && hay.indexOf(v) >= 0) best = Math.min(best, 4);
+        }
+        if (best === 9) { ok = false; break; }
+        score += best;
+      }
+      if (ok) out.push({ id: id, score: score, name: foodName(id, buy) });
+    }
+    return out.sort((x, y) => x.score - y.score || x.name.localeCompare(y.name, 'es'));
+  }
+  function pkListHTML() {
+    if (!pk) return '';
+    const buy = pk.ctx === 'add', res = foodSearch(pk.q, buy);
+    const row = x => { const f = FOODS[x.id]; return '<li><button class="pkrow" data-act="pk-pick" data-id="' + x.id + '"><b>' + esc(x.name) + (f.mine ? ' <span class="pill">mío</span>' : '') + '</b><small>' + esc(AISLES[f.aisle]) + ' · ' + fmtN(f.k) + ' kcal · ' + dec(f.p) + ' g de proteína por 100 g' + (f.dry && !buy ? ' (cocido)' : '') + '</small></button></li>'; };
+    if (!res.length) return '<li class="pkempty">No encuentro «' + esc(pk.q.trim()) + '». Prueba con otra palabra o crea el ingrediente con sus datos.</li>';
+    if (nrm(pk.q)) return res.map(row).join('');
+    return AISLES.map((al, i) => { const g = res.filter(x => FOODS[x.id].aisle === i); return g.length ? '<li class="pkhead" aria-hidden="true">' + esc(al) + ' · ' + g.length + '</li>' + g.map(row).join('') : ''; }).join('');
+  }
+  function pickerSheet() {
+    qs('#sheet-card').setAttribute('aria-labelledby', 'sheet-title');
+    openSheet('<div class="sheet-head"><div><h2 id="sheet-title">Elegir ingrediente</h2><p class="hint">Escribe una parte del nombre. Entiende sinónimos (tomate, palta, camarón…) y no importan los acentos.</p></div><button class="btn ghost small" data-act="pk-back">Volver</button></div>' +
+      '<div class="fld" style="margin-top:10px"><label for="pk-q">Buscar</label><input id="pk-q" type="search" data-act="pk-q" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="Ej.: pollo, queso, fresa, tortilla…" value="' + esc(pk.q) + '"></div>' +
+      '<p class="hint" id="pk-count" aria-live="polite" style="margin-top:6px"></p><ul class="pklist" id="pk-list">' + pkListHTML() + '</ul>' +
+      '<div class="actions" style="margin-top:10px"><button class="btn ghost small" data-act="fd-new" data-from="pk">¿No está? Crear ingrediente nuevo</button></div>');
+    pkCount(); const q = qs('#pk-q'); if (q) q.focus();
+  }
+  function pkCount() { const c = qs('#pk-count'); if (!c || !pk) return; const n = foodSearch(pk.q, pk.ctx === 'add').length; c.textContent = nrm(pk.q) ? (n + (n === 1 ? ' resultado' : ' resultados')) : (Object.keys(FOODS).length + ' ingredientes'); }
+  function pkBack() {
+    const p = pk; pk = null;
+    if (p && p.ctx === 'cr' && crDraft) { if (p.isNew) crDraft.ing.splice(p.i, 1); crSheet(); } else { closeSheet(); }
+  }
+  function pkPick(id) {
+    if (!pk || !FOODS[id]) return;
+    const p = pk; pk = null;
+    if (p.ctx === 'cr' && crDraft) { if (crDraft.ing[p.i]) crDraft.ing[p.i].f = id; crSheet(); }
+    else { addPick = id; closeSheet(); render(); }
+  }
+  function subFilter(q) {
+    const toks = nrm(q).split(' ').filter(Boolean); let n = 0;
+    qsa('#sheet-card li.cand').forEach(li => { const s = li.dataset.s || '', ok = toks.every(t => s.indexOf(t) >= 0 || s.indexOf(sing(t)) >= 0); li.hidden = !ok; if (ok) n++; });
+    const m = qs('#sub-empty'); if (m) m.hidden = n > 0;
   }
 
   function crAuto(f) { return foodClass(f); }
@@ -548,13 +606,13 @@
     box.textContent = 'Receta de partida: ' + fmtN(t.k) + ' kcal · ' + fmtN(t.p, 1) + ' g de proteína';
   }
   function crSheet() {
-    const d = crDraft, foods = Object.keys(FOODS).sort((a, b) => FOODS[a].n.localeCompare(FOODS[b].n, 'es'));
+    const d = crDraft;
     const ROLES = [['', 'Automático'], ['P', 'Proteína (se ajusta)'], ['B', 'Base (se ajusta)'], ['V', 'Fija (no se ajusta)']];
-    const rows = d.ing.map((i, n) => '<li class="crrow"><select id="cr-f-' + n + '" aria-label="Alimento" data-act="cr-sum">' + foods.map(f => '<option value="' + f + '"' + (f === i.f ? ' selected' : '') + '>' + esc(FOODS[f].n) + '</option>').join('') + '</select>' +
+    const rows = d.ing.map((i, n) => '<li class="crrow"><input type="hidden" id="cr-f-' + n + '" value="' + esc(i.f) + '"><button type="button" class="pickbtn" data-act="pick-food" data-i="' + n + '" aria-label="Cambiar alimento: ' + esc(foodName(i.f)) + '">' + esc(foodName(i.f) || 'Elegir…') + '</button>' +
       '<input id="cr-g-' + n + '" type="number" inputmode="numeric" min="1" max="2000" value="' + esc(i.g) + '" aria-label="Gramos" data-act="cr-sum"><span class="u">g</span>' +
       '<select id="cr-r-' + n + '" aria-label="Cómo se ajusta">' + ROLES.map(o => '<option value="' + o[0] + '"' + (o[0] === (i.r || '') ? ' selected' : '') + '>' + o[1] + '</option>').join('') + '</select>' +
       '<button class="link" data-act="cr-rm" data-i="' + n + '">Quitar</button></li>').join('');
-    const unitHint = Object.keys(FOODS).filter(f => FOODS[f].unitG).map(f => FOODS[f].unitG + ' g = 1 ' + FOODS[f].unit[0]).join(' · ');
+    const unitHint = Array.from(new Set(d.ing.map(i => i.f))).filter(f => FOODS[f] && FOODS[f].unitG).map(f => FOODS[f].unitG + ' g = 1 ' + FOODS[f].unit[0]).join(' · ');
     qs('#sheet-card').setAttribute('aria-labelledby', 'sheet-title');
     openSheet('<div class="sheet-head"><div><h2 id="sheet-title">' + (d.id ? 'Editar mi receta' : 'Crear mi receta') + '</h2><p class="hint">Eliges los ingredientes y los gramos de partida. Al ponerla en un día, la proteína y la base se ajustan a tu meta; lo fijo se queda igual.</p></div><button class="btn ghost small" data-act="close">Cerrar</button></div>' +
       '<div class="fields" style="margin-top:12px"><div class="fld"><label for="cr-name">Nombre</label><input id="cr-name" type="text" maxlength="50" value="' + esc(d.name) + '"></div>' +
@@ -593,8 +651,9 @@
       '<div class="actions" style="margin-top:8px"><button class="btn" data-act="fd-save">Guardar ingrediente</button><button class="btn ghost" data-act="fd-cancel">Cancelar</button>' + (d.id ? (fdDelAsk ? '<button class="btn ghost" data-act="fd-del2">Sí, borrarlo</button>' : '<button class="btn ghost" data-act="fd-del">Borrar</button>') : '') + '</div>');
   }
   function fdBack() {
-    const from = fdDraft && fdDraft.from; fdDraft = null; fdDelAsk = false; fdWarned = false;
-    if (from === 'cr' && crDraft) crSheet(); else if (from === 'list') fdListSheet(); else closeSheet();
+    const fdDraft0 = fdDraft, from = fdDraft && fdDraft.from; fdDraft = null; fdDelAsk = false; fdWarned = false;
+    const tgt = fdDraft0 && fdDraft0.tgt, tn = fdDraft0 && fdDraft0.tgtNew;
+    if (from === 'cr' && crDraft) { if (tn && tgt !== undefined) crDraft.ing.splice(tgt, 1); crSheet(); } else if (from === 'list') fdListSheet(); else closeSheet();
   }
   function fdListSheet() {
     qs('#sheet-card').setAttribute('aria-labelledby', 'sheet-title');
@@ -607,7 +666,7 @@
     const d = fdDraft, msg = qs('#fd-msg'), pf = x => { const t = String(x).trim().replace(',', '.'); return t === '' ? null : parseFloat(t); };
     const name = d.n.trim(), base = pf(d.base) === null ? 100 : pf(d.base);
     if (name.length < 2) { msg.textContent = 'Ponle un nombre al ingrediente.'; return; }
-    if (FOODS[d.id || ''] === undefined && Object.keys(FOODS).some(k => FOODS[k].n.toLowerCase() === name.toLowerCase())) { msg.textContent = 'Ya existe un ingrediente con ese nombre. Búscalo en la lista de la receta.'; return; }
+    if (FOODS[d.id || ''] === undefined && Object.keys(FOODS).some(k => FOODS[k].n.toLowerCase() === name.toLowerCase())) { msg.textContent = 'Ya existe un ingrediente con ese nombre. Búscalo con el buscador de ingredientes.'; return; }
     if (!isFinite(base) || base < 1 || base > 2000) { msg.textContent = '«Los valores son por» debe estar entre 1 y 2,000 g.'; return; }
     const sc = x => { const v = pf(x); return v === null ? 0 : v * 100 / base; };
     const k = pf(d.k), p = pf(d.p);
@@ -620,8 +679,8 @@
     if (d.id) { const i = S.foods.findIndex(x => x.id === d.id); if (i >= 0) S.foods[i] = o; } else S.foods.push(o);
     registerFood(o); S.example = false; persist();
     const from = d.from; fdDraft = null; fdDelAsk = false; fdWarned = false;
-    if (from === 'cr' && crDraft) { if (!d.id) crDraft.ing.push({ f: o.id, g: 100, r: '' }); crSheet(); }
-    else if (from === 'list') fdListSheet(); else { closeSheet(); render(); }
+    if (from === 'cr' && crDraft) { if (!d.id) { if (d.tgt !== undefined && crDraft.ing[d.tgt]) crDraft.ing[d.tgt].f = o.id; else crDraft.ing.push({ f: o.id, g: 100, r: '' }); } crSheet(); }
+    else if (from === 'list') fdListSheet(); else { if (!d.id) addPick = o.id; closeSheet(); render(); }
   }
   function fdDelete() {
     const id = fdDraft && fdDraft.id; if (!id) return;
@@ -1181,8 +1240,18 @@
       case 'sub-clear': { const dd = S.week.days[+el.dataset.d]; if (dd.subs) delete dd.subs[el.dataset.s]; persist(); render(); break; }
       case 'cr-new': crDraft = { id: null, name: '', slot: recSlot !== 'all' && SLOTS_ALL.indexOf(recSlot) >= 0 ? recSlot : 'com', min: 20, how: '', ing: [{ f: 'pollo', g: 150, r: '' }, { f: 'arroz', g: 80, r: '' }] }; crDelAsk = false; crSheet(); break;
       case 'cr-edit': { const d = DISH[el.dataset.id]; if (!d || !d.mine) break; crDraft = { id: d.id, name: d.name, slot: d.slot, min: d.min, how: d.how || '', ing: d.ing.map(i => ({ f: i.f, g: i.g, r: i.r })) }; crDelAsk = false; crSheet(); break; }
-      case 'cr-add': { crRead(); const used = new Set(crDraft.ing.map(i => i.f)); const nf = ['jitomate', 'cebolla', 'zanahoria', 'lechuga', 'aguacate'].concat(Object.keys(FOODS)).find(f => FOODS[f] && !used.has(f)) || 'jitomate'; crDraft.ing.push({ f: nf, g: 100, r: '' }); crSheet(); break; }
-      case 'fd-new': if (el.dataset.from === 'cr') crRead(); fdDraft = fdBlank(el.dataset.from); fdSheet(); break;
+      case 'cr-add': { crRead(); const used = new Set(crDraft.ing.map(i => i.f)); const nf = ['jitomate', 'cebolla', 'zanahoria', 'lechuga', 'aguacate'].concat(Object.keys(FOODS)).find(f => FOODS[f] && !used.has(f)) || 'jitomate'; crDraft.ing.push({ f: nf, g: 100, r: '' }); pk = { ctx: 'cr', i: crDraft.ing.length - 1, q: '', isNew: true }; pickerSheet(); break; }
+      case 'pick-food': crRead(); pk = { ctx: 'cr', i: +el.dataset.i, q: '', isNew: false }; pickerSheet(); break;
+      case 'pick-add': { const g = qs('#add-g'); if (g) addG = g.value; pk = { ctx: 'add', q: '', isNew: false }; pickerSheet(); break; }
+      case 'pk-pick': pkPick(el.dataset.id); break;
+      case 'pk-back': pkBack(); break;
+      case 'fd-new': {
+        let from = el.dataset.from, tgt = null;
+        if (from === 'pk' && pk) { tgt = pk; from = pk.ctx === 'cr' ? 'cr' : 'add'; pk = null; }
+        else if (from === 'cr') crRead();
+        fdDraft = fdBlank(from); if (tgt && tgt.ctx === 'cr') { fdDraft.tgt = tgt.i; fdDraft.tgtNew = !!tgt.isNew; }
+        fdSheet(); break;
+      }
       case 'fd-list': fdListSheet(); break;
       case 'fd-edit': { const f = FOODS[el.dataset.id]; if (!f || !f.mine) break; fdDraft = fdFrom(f, el.dataset.from); fdSheet(); break; }
       case 'fd-save': fdSave(); break;
@@ -1274,9 +1343,9 @@
       }
       case 'add-stock': {
         const id = qs('#add-f').value, g = parseFloat(qs('#add-g').value);
-        if (!FOODS[id]) break;
+        if (!FOODS[id]) { addG = qs('#add-g').value; pk = { ctx: 'add', q: '', isNew: false }; pickerSheet(); break; }
         if (isFinite(g) && g > 0) S.stock[id] = Math.round(g); else S.staples[id] = true;
-        S.example = false; persist(); render(); break;
+        addPick = ''; addG = ''; S.example = false; persist(); render(); break;
       }
       case 'close-week': {
         const tg = targets(S.cfg), rows = currentShop(null, tg), prev = { stock: S.stock, week: S.week, bought: S.bought, example: S.example };
@@ -1336,10 +1405,12 @@
     }
     if (t.dataset.act === 'out-prev') outPreview(+t.dataset.d, t.dataset.s);
     if (t.dataset.act === 'cr-sum') crSumUpdate();
+    if (t.dataset.act === 'pk-q' && pk) { pk.q = t.value; const box = qs('#pk-list'); if (box) { box.innerHTML = pkListHTML(); box.scrollTop = 0; } pkCount(); }
+    if (t.dataset.act === 'sub-q') subFilter(t.value);
     if (t.dataset.act === 'tk-text') tkText = t.value;
     if (t.dataset.act === 'rec-q') { recQ = t.value; const box = qs('#rec-list'); if (box) box.innerHTML = recListHTML(); }
   });
-  document.addEventListener('keydown', e => { if (e.key === 'Escape' && !qs('#sheet').hidden) closeSheet(); });
+  document.addEventListener('keydown', e => { if (e.key === 'Escape' && !qs('#sheet').hidden) { if (pk) pkBack(); else closeSheet(); } });
   qs('#sheet').addEventListener('click', e => { if (e.target.id === 'sheet') closeSheet(); });
   window.addEventListener('hashchange', route);
   if (STANDALONE && 'serviceWorker' in navigator && /^https?:$/.test(location.protocol)) navigator.serviceWorker.register('sw.js').catch(() => { /* sin modo sin conexión */ });

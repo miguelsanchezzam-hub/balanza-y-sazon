@@ -63,8 +63,9 @@ tests/run.sh          ← pruebas del motor
 
 ### Tareas comunes
 
+- **Buscar un ingrediente:** al armar una receta, en la despensa y al cambiar un ingrediente hay un buscador (sin acentos, con sinónimos como tomate/jitomate o palta/aguacate). La lista base trae unos 210 alimentos.
 - **Agregar un ingrediente propio (sin tocar código):** en la app, Recetas → «Mis ingredientes» o, dentro de una receta, «Crear ingrediente nuevo». Se guarda en tu respaldo y viaja con «Enviar mi plan».
-- **Cambiar un alimento de la lista base:** `FOODS` en `src/data.js`. Valores por 100 g; `pack` es el tamaño del paquete de compra y `price` el precio supuesto en pesos.
+- **Cambiar un alimento de la lista base:** `FOODS` y `MORE_FOODS` en `src/data.js` (los de `MORE_FOODS` se escriben en una línea: `[id, nombre, kcal, proteína, carbohidratos, grasa, paquete, precio, pasillo, 'etiquetas', extras]`). Valores por 100 g; `pack` es el tamaño del paquete de compra y `price` el precio supuesto en pesos.
 - **Agregar un platillo:** `DISHES` en `src/data.js`. Copia uno existente; cada ingrediente usa el `id` de un alimento de `FOODS`. Después corre `tests/run.sh`: revisa que ningún perfil se quede sin días válidos.
 - **Agregar una comida a «Comí fuera»:** una línea en `OUT_ITEMS` de `src/local.js`: `[nombre, unidad, kcal, proteína, 'alias1|alias2']`. Los alias van sin acentos y en singular o plural indistinto.
 - **Que el lector de tickets reconozca otro producto:** `TK_ALIAS` en `src/local.js` (raíces de palabras como salen impresas, por ejemplo `pech` para «PECH POLLO»).

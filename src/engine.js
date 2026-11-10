@@ -220,7 +220,7 @@ function storeFactor(factors, storeId) {
   return factors && typeof factors[storeId] === 'number' ? factors[storeId] : st.f;
 }
 /* Alimentos que duran más de una semana: sus sobrantes se guardan para la siguiente. El resto (hoja verde, carne, lácteos, pan) se echa a perder. */
-const KEEPS = new Set(['arroz', 'pasta', 'avena', 'frijol', 'lenteja', 'garbanzo', 'aceite', 'cacahuate', 'almendra', 'atun', 'papa', 'camote', 'cebolla', 'zanahoria', 'huevo', 'manzana']);
+const KEEPS = new Set(['arroz', 'pasta', 'avena', 'frijol', 'lenteja', 'garbanzo', 'aceite', 'cacahuate', 'almendra', 'atun', 'papa', 'camote', 'cebolla', 'zanahoria', 'huevo', 'manzana'].concat(typeof MORE_KEEPS !== 'undefined' ? MORE_KEEPS : []));
 
 /* stock: gramos que ya hay en casa (en gramos de compra: secos para legumbres). staples: lo que siempre hay y nunca se compra. */
 function shopRows(dayEvs, people, storeId, factors, prices, staples, stock, aisleStores, more) {

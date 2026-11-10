@@ -132,6 +132,18 @@ h1, h2, h3 { font-family: var(--f-display); text-wrap: balance; margin: 0; line-
 .crrow select, .crrow input { background: var(--surface); color: var(--ink); border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; font: inherit; font-size: 14px; min-width: 0; max-width: 100%; }
 .crrow input { width: 84px; }
 .crrow .u { color: var(--muted); }
+.pickbtn { flex: 1 1 150px; min-width: 0; max-width: 100%; text-align: left; background: var(--surface); color: var(--ink); border: 1px solid var(--line); border-radius: 8px; padding: 8px 28px 8px 10px; font: inherit; font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; cursor: pointer; position: relative; }
+.pickbtn::after { content: "⌕"; position: absolute; right: 9px; top: 50%; transform: translateY(-50%); color: var(--muted); }
+.pickbtn:focus-visible { outline: 2px solid var(--accent, #c4552d); outline-offset: 2px; }
+.priceedit .pickbtn { padding: 9px 28px 9px 10px; flex: 1 1 170px; }
+.pklist { list-style: none; padding: 0; margin: 8px 0 0; max-height: min(52vh, 460px); overflow-y: auto; border-top: 1px solid var(--line); overscroll-behavior: contain; }
+.pkrow { display: block; width: 100%; text-align: left; background: none; border: 0; border-bottom: 1px solid var(--line); padding: 10px 4px; font: inherit; color: var(--ink); cursor: pointer; min-height: 44px; }
+.pkrow b { display: block; font-weight: 600; overflow-wrap: anywhere; }
+.pkrow small { display: block; color: var(--muted); font-size: 12.5px; }
+.pkrow:hover, .pkrow:focus-visible { background: color-mix(in srgb, var(--accent, #c4552d) 9%, transparent); outline: none; }
+.pkhead { position: sticky; top: 0; z-index: 1; background: var(--surface); color: var(--muted); font-size: 12px; letter-spacing: .06em; text-transform: uppercase; padding: 8px 4px 6px; border-bottom: 1px solid var(--line); }
+.pkempty { color: var(--muted); padding: 14px 4px; }
+.cand[hidden] { display: none; }
 .crlist { margin: 6px 0 0; padding: 0; }
 .isub { padding: 0 0 10px; }
 .wl { margin: 6px 0 0; padding: 0; }
